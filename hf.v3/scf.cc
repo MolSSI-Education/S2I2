@@ -248,6 +248,36 @@ std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
         );
         break;
 
+      case 6: // Z=6: carbon
+        shells.push_back(
+            {
+              {71.616837000, 13.045096000, 3.530512200},
+              {
+                {0, false, {0.15432897, 0.53532814, 0.44463454}}
+              },
+              {{atoms[a].x, atoms[a].y, atoms[a].z}}
+            }
+        );
+        shells.push_back(
+            {
+              {2.941249400, 0.683483100, 0.222289900},
+              {
+                {0, false, {-0.09996723, 0.39951283, 0.70011547}}
+              },
+              {{atoms[a].x, atoms[a].y, atoms[a].z}}
+            }
+        );
+        shells.push_back(
+            {
+              {2.941249400, 0.683483100, 0.222289900},
+              { // contraction 0: p shell (l=1), spherical=false
+                {1, false, {0.15591627, 0.60768372, 0.39195739}}
+              },
+              {{atoms[a].x, atoms[a].y, atoms[a].z}}
+            }
+        );
+        break;
+
       case 8: // Z=8: oxygen
         shells.push_back(
             {
