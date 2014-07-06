@@ -16,32 +16,29 @@ double* read_2e_ints(const char* filename, int nao);
 int main(int argc, char *argv[]) {
 
   try {
-    int i, j, k, l, ij, kl, ijkl, ik, jl, ikjl;
-    int natom, ndocc, nao, iter = 0, maxiter = 100;
-    double enuc, escf, escf_last, ediff, rmsd, conv = 1e-12;
-    double **S, **T, **V, **H, **F, *TEI;
-    double **X, **Fp, **C, **D, **D_last;
-    double *eps;
+    double **X, **F, **Fp, **C, **D, **D_last, *eps;
     double **evecs, *evals, **TMP;
-    double *zval, *x, *y, *z;
 
     /*** =========================== ***/
     /*** initialize integrals, etc.  ***/
     /*** =========================== ***/
 
     // read geometry from xyz file
+    int natom;
+    double *zval, *x, *y, *z;
     read_geometry("geom.dat", natom, zval, x, y, z);
 
     // count the number of electrons
     int nelectron = 0;
-    for (i = 0; i < natom; i++)
+    int ndocc;
+    for (int i = 0; i < natom; i++)
       nelectron += zval[i];
     ndocc = nelectron / 2;
 
     /* nuclear repulsion energy */
-    enuc = 0.0;
-    for (i = 0; i < natom; i++)
-      for (j = i + 1; j < natom; j++) {
+    double enuc = 0.0;
+    for (int i = 0; i < natom; i++)
+      for (int j = i + 1; j < natom; j++) {
         const double r2 = (x[i] - x[j]) * (x[i] - x[j])
             + (y[i] - y[j]) * (y[i] - y[j]) + (z[i] - z[j]) * (z[i] - z[j]);
         const double r = sqrt(r2);
@@ -50,28 +47,29 @@ int main(int argc, char *argv[]) {
     printf("\tNuclear repulsion energy = %20.10lf\n", enuc);
 
     /* Have the user input some key data */
+    int nao;
     printf("\nEnter the number of AOs: ");
     scanf("%d", &nao);
 
     /* overlap integrals */
-    S = read_1e_ints("s.dat", nao);
+    double **S = read_1e_ints("s.dat", nao);
     printf("\n\tOverlap Integrals:\n");
     print_mat(S, nao, nao, stdout);
 
     /* kinetic-energy integrals */
-    T = read_1e_ints("t.dat", nao);
+    double **T = read_1e_ints("t.dat", nao);
     printf("\n\tKinetic-Energy Integrals:\n");
     print_mat(T, nao, nao, stdout);
 
     /* nuclear-attraction integrals */
-    V = read_1e_ints("v.dat", nao);
+    double **V = read_1e_ints("v.dat", nao);
     printf("\n\tNuclear Attraction Integrals:\n");
     print_mat(V, nao, nao, stdout);
 
     /* Core Hamiltonian */
-    H = init_matrix(nao, nao);
-    for (i = 0; i < nao; i++)
-      for (j = 0; j < nao; j++)
+    double **H = init_matrix(nao, nao);
+    for (int i = 0; i < nao; i++)
+      for (int j = 0; j < nao; j++)
         H[i][j] = T[i][j] + V[i][j];
     printf("\n\tCore Hamiltonian:\n");
     print_mat(H, nao, nao, stdout);
@@ -80,14 +78,14 @@ int main(int argc, char *argv[]) {
     delete_matrix(V);
 
     /* two-electron integrals */
-    TEI = read_2e_ints("eri.dat", nao);
+    double *TEI = read_2e_ints("eri.dat", nao);
 
     /* build the symmetric orthogonalizer X = S^(-1/2) */
     evecs = init_matrix(nao, nao);
     evals = init_array(nao);
     diag(nao, nao, S, evals, 1, evecs, 1e-13);
-    for (i = 0; i < nao; i++) {
-      for (j = 0; j < nao; j++) {
+    for (int i = 0; i < nao; i++) {
+      for (int j = 0; j < nao; j++) {
         S[i][j] = 0.0;
       }
       S[i][i] = 1.0 / sqrt(evals[i]);
@@ -108,8 +106,8 @@ int main(int argc, char *argv[]) {
     /*** =========================== ***/
 
     F = init_matrix(nao, nao);
-    for (i = 0; i < nao; i++)
-      for (j = 0; j < nao; j++)
+    for (int i = 0; i < nao; i++)
+      for (int j = 0; j < nao; j++)
         F[i][j] = H[i][j]; /* core Hamiltonian guess */
 
     TMP = init_matrix(nao, nao);
@@ -127,17 +125,20 @@ int main(int argc, char *argv[]) {
     print_mat(C, nao, nao, stdout);
 
     D = init_matrix(nao, nao);
-    for (i = 0; i < nao; i++)
-      for (j = 0; j < nao; j++)
-        for (k = 0; k < ndocc; k++)
+    for (int i = 0; i < nao; i++)
+      for (int j = 0; j < nao; j++)
+        for (int k = 0; k < ndocc; k++)
           D[i][j] += C[i][k] * C[j][k];
     printf("\n\tInitial Density Matrix:\n");
     print_mat(D, nao, nao, stdout);
 
-    escf = 0.0;
-    for (i = 0; i < nao; i++)
-      for (j = 0; j < nao; j++)
+    double escf = 0.0;
+    for (int i = 0; i < nao; i++)
+      for (int j = 0; j < nao; j++)
         escf += D[i][j] * (H[i][j] + F[i][j]);
+
+    int iter = 0;
+    int maxiter = 1000;
 
     printf(
         "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)\n");
@@ -149,27 +150,32 @@ int main(int argc, char *argv[]) {
     /*** main iterative loop ***/
     /*** =========================== ***/
 
+    double ediff;
+    double rmsd;
+    double escf_last = 0.0;
+    double conv = 1e-12;
+
     do {
       iter++;
 
       /* Save a copy of the energy and the density */
       escf_last = escf;
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++)
+      for (int i = 0; i < nao; i++)
+        for (int j = 0; j < nao; j++)
           D_last[i][j] = D[i][j];
 
       /* build a new Fock matrix */
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++) {
+      for (int i = 0; i < nao; i++)
+        for (int j = 0; j < nao; j++) {
           F[i][j] = H[i][j];
-          for (k = 0; k < nao; k++)
-            for (l = 0; l < nao; l++) {
-              ij = INDEX(i, j);
-              kl = INDEX(k, l);
-              ijkl = INDEX(ij, kl);
-              ik = INDEX(i, k);
-              jl = INDEX(j, l);
-              ikjl = INDEX(ik, jl);
+          for (int k = 0; k < nao; k++)
+            for (int l = 0; l < nao; l++) {
+              int ij = INDEX(i, j);
+              int kl = INDEX(k, l);
+              int ijkl = INDEX(ij, kl);
+              int ik = INDEX(i, k);
+              int jl = INDEX(j, l);
+              int ikjl = INDEX(ik, jl);
 
               F[i][j] += D[k][l] * (2.0 * TEI[ijkl] - TEI[ikjl]);
             }
@@ -192,20 +198,20 @@ int main(int argc, char *argv[]) {
       zero_matrix(C, nao, nao);
       mmult(X, 0, TMP, 0, C, nao, nao, nao);
       zero_matrix(D, nao, nao);
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++)
-          for (k = 0; k < ndocc; k++)
+      for (int i = 0; i < nao; i++)
+        for (int j = 0; j < nao; j++)
+          for (int k = 0; k < ndocc; k++)
             D[i][j] += C[i][k] * C[j][k];
 
       escf = 0.0;
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++)
+      for(int i = 0; i < nao; i++)
+        for(int j = 0; j < nao; j++)
           escf += D[i][j] * (H[i][j] + F[i][j]);
 
       ediff = escf - escf_last;
       rmsd = 0.0;
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++)
+      for(int i = 0; i < nao; i++)
+        for(int j = 0; j < nao; j++)
           rmsd += (D[i][j] - D_last[i][j]) * (D[i][j] - D_last[i][j]);
 
       printf(" %02d %20.12f %20.12f %20.12f %20.12f\n", iter, escf, escf + enuc,

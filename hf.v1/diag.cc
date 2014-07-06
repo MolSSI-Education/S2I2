@@ -180,7 +180,7 @@ void tred2(int n, double **a, double *d, double *e, int matz) {
 
 void tqli(int n, double *d, double **z, double *e, int matz, double toler) {
   int i, k, l, m, iter;
-  double dd, g, r, s, c, p, f, b;
+  double g, r, s, c, p, f, b;
   double azi;
 
   f = 0.0;
@@ -197,7 +197,7 @@ void tqli(int n, double *d, double **z, double *e, int matz, double toler) {
   for (l = 0; l < n; l++) {
     iter = 0;
     L1: for (m = l; m < n - 1; m++) {
-      dd = fabs(d[m]) + fabs(d[m + 1]);
+//      dd = fabs(d[m]) + fabs(d[m + 1]);
 #if 0
       if (fabs(e[m])+dd == dd) goto L2;
 #else
@@ -341,7 +341,7 @@ void eigsort(double *d, double **v, int n) {
 }
 
 void print_mat(double **a, int m, int n, FILE *out) {
-  int ii, jj, kk, nn, ll;
+  int ii, jj, kk, nn;
   int i, j;
 
   ii = 0;
@@ -352,7 +352,7 @@ void print_mat(double **a, int m, int n, FILE *out) {
   nn = n;
   if (nn > kk)
     nn = kk;
-  ll = 2 * (nn - ii + 1) + 1;
+//  ll = 2 * (nn - ii + 1) + 1;
   fprintf(out, "\n");
   for (i = ii; i <= nn; i++)
     fprintf(out, "       %5d", i);
