@@ -2,14 +2,22 @@
 #include <cstdlib>
 #include <cmath>
 #include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <vector>
+#include <cassert>
 
 #include "diag.h"
 #include "mmult.h"
 
 #define INDEX(i,j) ((i>j) ? (((i)*((i)+1)/2)+(j)) : (((j)*((j)+1)/2)+(i)))
 
-void read_geometry(const char* filename, int& natom, double*& zval,
-                   double*& x, double*& y, double*& z);
+struct Atom {
+    int Z;
+    double x, y, z;
+};
+
+void read_geometry(const char*, std::vector<Atom>&);
 double** read_1e_ints(const char* filename, int nao);
 double* read_2e_ints(const char* filename, int nao);
 
@@ -24,25 +32,24 @@ int main(int argc, char *argv[]) {
     /*** =========================== ***/
 
     // read geometry from xyz file
-    int natom;
-    double *zval, *x, *y, *z;
-    read_geometry("geom.dat", natom, zval, x, y, z);
+    std::vector<Atom> atoms;
+    read_geometry("geom.dat", atoms);
 
     // count the number of electrons
     int nelectron = 0;
-    int ndocc;
-    for (int i = 0; i < natom; i++)
-      nelectron += zval[i];
-    ndocc = nelectron / 2;
+    for (unsigned int i = 0; i < atoms.size(); i++) nelectron += atoms[i].Z;
+    int ndocc = nelectron / 2;
 
     /* nuclear repulsion energy */
     double enuc = 0.0;
-    for (int i = 0; i < natom; i++)
-      for (int j = i + 1; j < natom; j++) {
-        const double r2 = (x[i] - x[j]) * (x[i] - x[j])
-            + (y[i] - y[j]) * (y[i] - y[j]) + (z[i] - z[j]) * (z[i] - z[j]);
-        const double r = sqrt(r2);
-        enuc += zval[i] * zval[j] / r;
+    for (unsigned int i = 0; i < atoms.size(); i++)
+      for (unsigned int j = i + 1; j < atoms.size(); j++) {
+        double xij = atoms[i].x - atoms[j].x;
+        double yij = atoms[i].y - atoms[j].y;
+        double zij = atoms[i].z - atoms[j].z;
+        double r2 = xij*xij + yij*yij + zij*zij;
+        double r = sqrt(r2);
+        enuc += atoms[i].Z * atoms[j].Z / r;
       }
     printf("\tNuclear repulsion energy = %20.10lf\n", enuc);
 
@@ -219,11 +226,6 @@ int main(int argc, char *argv[]) {
 
     } while (((fabs(ediff) > conv) || (fabs(rmsd) > conv)) && (iter < maxiter));
 
-    delete[] zval;
-    delete[] x;
-    delete[] y;
-    delete[] z;
-
     delete_matrix(TMP);
     delete_matrix(D_last);
     delete_matrix(D);
@@ -257,39 +259,34 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
+void read_geometry(const char *filename, std::vector<Atom>& atoms)
+{
+  std::ifstream is(filename);
+  assert(is.good());
 
-void read_geometry(const char* filename, int& natom, double*& zval, double*& x,
-                   double*& y, double*& z) {
+  size_t natom;
+  is >> natom;
 
-  FILE* input = fopen(filename, "r");
-  if (input == NULL)
-    throw std::string("failed to open file ") + filename;
+  atoms.resize(natom);
+  for(unsigned int i = 0; i < natom; i++)
+    is >> atoms[i].Z >> atoms[i].x >> atoms[i].y >> atoms[i].z;
 
-  fscanf(input, "%d", &natom);
-
-  zval = init_array(natom);
-  x = init_array(natom);
-  y = init_array(natom);
-  z = init_array(natom);
-
-  for (int i = 0; i < natom; i++)
-    fscanf(input, "%lf%lf%lf%lf", &zval[i], &x[i], &y[i], &z[i]);
-  fclose(input);
+  is.close();
 }
 
 double** read_1e_ints(const char* filename, int nao) {
-  FILE* input = fopen(filename, "r");
-  if (input == NULL)
-    throw std::string("failed to open file ") + filename;
+  std::ifstream is(filename);
+  assert(is.good());
 
   double** result = init_matrix(nao, nao);
 
   int i, j;
   double val;
-  while (fscanf(input, "%d %d %lf", &i, &j, &val) != EOF)
+  while (!is.eof()) {
+    is >> i >> j >> val;
     result[i - 1][j - 1] = result[j - 1][i - 1] = val;
-
-  fclose(input);
+  }
+  is.close();
 
   return result;
 }
@@ -297,21 +294,20 @@ double** read_1e_ints(const char* filename, int nao) {
 double* read_2e_ints(const char* filename, int nao) {
   double* result = init_array((nao * (nao + 1) / 2) * ((nao * (nao + 1) / 2) + 1) / 2);
 
-  FILE* input = fopen(filename, "r");
-  if (input == NULL)
-    throw std::string("failed to open file ") + filename;
+  std::ifstream is(filename);
+  assert(is.good());
 
   int i, j, k, l;
   double val;
-  while (fscanf(input, "%d %d %d %d %lf", &i, &j, &k, &l, &val) != EOF) {
+  while (!is.eof()) {
+    is >> i >> j >> k >> l >> val;
     long ij = INDEX(i - 1, j - 1);
     long kl = INDEX(k - 1, l - 1);
     long ijkl = INDEX(ij, kl);
-
     result[ijkl] = val;
   }
-
-  fclose(input);
+  is.close();
 
   return result;
 }
+
