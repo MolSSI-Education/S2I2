@@ -7,7 +7,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
-#include "shell.h"
+#include <libint2.h>
+#include <libint2/cxxapi.h>
 
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
         Matrix;  // import dense, dynamically sized Matrix type from Eigen; this is row-major to meet the assumption of the integral library
@@ -23,7 +24,16 @@ void read_geometry(const std::string& filename, std::vector<Atom>& atoms);
 std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms);
 size_t nbasis(const std::vector<libint2::Shell>& shells);
 std::vector<size_t> map_shell_to_basis_function(const std::vector<libint2::Shell>& shells);
-Matrix compute_overlap_ints(const std::vector<libint2::Shell>& shells);
+Matrix compute_1body_ints(const std::vector<libint2::Shell>& shells,
+                          libint2::OneBodyEngine::type t,
+                          const std::vector<Atom>& atoms = std::vector<Atom>());
+
+// simple-to-read, but inefficient Fock builded; computes ~16 times as many ints as possible
+Matrix compute_2body_fock_simple(const std::vector<libint2::Shell>& shells,
+                                 const Matrix& D);
+// an efficient Fock builded; computes permutationally-unique ints once
+Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
+                                 const Matrix& D);
 
 int main(int argc, char *argv[]) {
 
@@ -32,6 +42,8 @@ int main(int argc, char *argv[]) {
   using std::endl;
 
   try {
+
+    libint2::init();
 
     /*** =========================== ***/
     /*** initialize integrals, etc.  ***/
@@ -70,20 +82,17 @@ int main(int argc, char *argv[]) {
       nao += shells[s].size();
 
     // compute overlap integrals
-    auto S = compute_overlap_ints(shells);
+    auto S = compute_1body_ints(shells, libint2::OneBodyEngine::overlap);
     cout << "\n\tOverlap Integrals:\n";
     cout << S << endl;
 
-#if 0
     // compute kinetic-energy integrals
-    Matrix T(nao, nao);
-    read_1e_ints(T, "t.dat");
+    auto T = compute_1body_ints(shells, libint2::OneBodyEngine::kinetic);
     cout << "\n\tKinetic-Energy Integrals:\n";
     cout << T << endl;
 
     // compute nuclear-attraction integrals
-    Matrix V(nao, nao);
-    read_1e_ints(V, "v.dat");
+    Matrix V = compute_1body_ints(shells, libint2::OneBodyEngine::nuclear, atoms);
     cout << "\n\tNuclear Attraction Integrals:\n";
     cout << V << endl;
 
@@ -95,9 +104,6 @@ int main(int argc, char *argv[]) {
     // T and V no longer needed, free up the memory
     T.resize(0,0);
     V.resize(0,0);
-
-    /* read two-electron integrals */
-    auto TEI = read_2e_ints("eri.dat", nao);
 
     /*** =========================== ***/
     /*** build initial-guess density ***/
@@ -145,6 +151,8 @@ int main(int argc, char *argv[]) {
 
       // build a new Fock matrix
       auto F = H;
+      F += compute_2body_fock_simple(shells, D);
+#if 0
       for (auto i = 0; i < nao; i++)
         for (auto j = 0; j < nao; j++) {
           for (auto k = 0; k < nao; k++)
@@ -159,6 +167,7 @@ int main(int argc, char *argv[]) {
               F(i,j) += D(k,l) * (2.0 * TEI[ijkl] - TEI[ikjl]);
             }
         }
+#endif
 
       if (iter == 1) {
         cout << "\n\tFock Matrix:\n";
@@ -189,8 +198,8 @@ int main(int argc, char *argv[]) {
 
     } while (((fabs(ediff) > conv) || (fabs(rmsd) > conv)) && (iter < maxiter));
 
-    delete[] TEI;
-#endif
+    libint2::cleanup(); // done with libint
+
   } // end of try block
 
   catch (const char* ex) {
@@ -314,14 +323,33 @@ std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
 
   }
 
+  for(auto& s: shells) {
+    s.renorm();
+  }
+
   return shells;
 }
 
 size_t nbasis(const std::vector<libint2::Shell>& shells) {
   size_t n = 0;
-  for (auto shell: shells)
+  for (const auto& shell: shells)
     n += shell.size();
   return n;
+}
+
+size_t max_nprim(const std::vector<libint2::Shell>& shells) {
+  size_t n = 0;
+  for (auto shell: shells)
+    n = std::max(shell.nprim(), n);
+  return n;
+}
+
+int max_l(const std::vector<libint2::Shell>& shells) {
+  int l = 0;
+  for (auto shell: shells)
+    for (auto c: shell.contr)
+      l = std::max(c.l, l);
+  return l;
 }
 
 std::vector<size_t> map_shell_to_basis_function(const std::vector<libint2::Shell>& shells) {
@@ -337,14 +365,24 @@ std::vector<size_t> map_shell_to_basis_function(const std::vector<libint2::Shell
   return result;
 }
 
-Matrix compute_overlap_ints(const std::vector<libint2::Shell>& shells)
+Matrix compute_1body_ints(const std::vector<libint2::Shell>& shells,
+                          libint2::OneBodyEngine::type obtype,
+                          const std::vector<Atom>& atoms)
 {
   const auto n = nbasis(shells);
   Matrix result(n,n);
 
-  auto shell2bf = map_shell_to_basis_function(shells);
+  // construct the overlap integrals engine
+  libint2::OneBodyEngine engine(obtype, max_nprim(shells), max_l(shells), 0);
+  if (obtype == libint2::OneBodyEngine::nuclear) {
+    std::vector<std::pair<double,std::array<double,3>>> q;
+    for(const auto& atom : atoms) {
+      q.push_back( {static_cast<double>(atom.atomic_number), {{atom.x, atom.y, atom.z}}} );
+    }
+    engine.set_q(q);
+  }
 
-  double* buf = new double[100]; std::fill(buf, buf+100, 0.0);
+  auto shell2bf = map_shell_to_basis_function(shells);
 
   for(auto s1=0; s1!=shells.size(); ++s1) {
 
@@ -356,7 +394,7 @@ Matrix compute_overlap_ints(const std::vector<libint2::Shell>& shells)
       auto bf2 = shell2bf[s2];
       auto n2 = shells[s2].size();
 
-      //auto buf = libint2_compute_overlap(shells[s1], shells[s2]);
+      auto buf = engine.compute(shells[s1], shells[s2]);
       Eigen::Map<Matrix> buf_mat(buf, n1, n2);
       result.block(bf1, bf2, n1, n2) = buf_mat;
       result.block(bf2, bf1, n2, n1) = buf_mat.transpose();
@@ -365,4 +403,139 @@ Matrix compute_overlap_ints(const std::vector<libint2::Shell>& shells)
   }
 
   return result;
+}
+
+Matrix compute_2body_fock_simple(const std::vector<libint2::Shell>& shells,
+                                 const Matrix& D) {
+
+  const auto n = nbasis(shells);
+  Matrix G = Matrix::Zero(n,n);
+
+  // construct the 2-electron repulsion integrals engine
+  libint2::TwoBodyEngine<libint2::Coulomb> engine(max_nprim(shells), max_l(shells), 0);
+
+  auto shell2bf = map_shell_to_basis_function(shells);
+
+  for(auto s1=0; s1!=shells.size(); ++s1) {
+
+    auto bf1_first = shell2bf[s1]; // first basis function in this shell
+    auto n1 = shells[s1].size();
+
+    for(auto s2=0; s2!=shells.size(); ++s2) {
+
+      auto bf2_first = shell2bf[s2];
+      auto n2 = shells[s2].size();
+
+      for(auto s3=0; s3!=shells.size(); ++s3) {
+
+        auto bf3_first = shell2bf[s3];
+        auto n3 = shells[s3].size();
+
+        for(auto s4=0; s4!=shells.size(); ++s4) {
+
+          auto bf4_first = shell2bf[s4];
+          auto n4 = shells[s4].size();
+
+          // compute Coulomb contribution
+          auto buf_1234 = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
+
+          for(auto f1=0, f1234=0; f1!=n1; ++f1) {
+            const auto bf1 = f1 + bf1_first;
+            for(auto f2=0; f2!=n2; ++f2) {
+              const auto bf2 = f2 + bf2_first;
+              for(auto f3=0; f3!=n3; ++f3) {
+                const auto bf3 = f3 + bf3_first;
+                for(auto f4=0; f4!=n4; ++f4, ++f1234) {
+                  const auto bf4 = f4 + bf4_first;
+                  G(bf1,bf2) += D(bf3,bf4) * 2.0 * buf_1234[f1234];
+                }
+              }
+            }
+          }
+
+          // compute exchange contribution
+          auto buf_1324 = engine.compute(shells[s1], shells[s3], shells[s2], shells[s4]);
+
+          for(auto f1=0, f1324=0; f1!=n1; ++f1) {
+            const auto bf1 = f1 + bf1_first;
+            for(auto f3=0; f3!=n3; ++f3) {
+              const auto bf3 = f3 + bf3_first;
+              for(auto f2=0; f2!=n2; ++f2) {
+                const auto bf2 = f2 + bf2_first;
+                for(auto f4=0; f4!=n4; ++f4, ++f1324) {
+                  const auto bf4 = f4 + bf4_first;
+                  G(bf1,bf2) -= D(bf3,bf4) * buf_1324[f1324];
+                }
+              }
+            }
+          }
+
+        }
+      }
+    }
+  }
+
+  return G;
+}
+
+Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
+                                 const Matrix& D) {
+
+  const auto n = nbasis(shells);
+  Matrix G = Matrix::Zero(n,n);
+
+  // construct the 2-electron repulsion integrals engine
+  libint2::TwoBodyEngine<libint2::Coulomb> engine(max_nprim(shells), max_l(shells), 0);
+
+  auto shell2bf = map_shell_to_basis_function(shells);
+
+  for(auto s1=0; s1!=shells.size(); ++s1) {
+
+    auto bf1_first = shell2bf[s1]; // first basis function in this shell
+    auto n1 = shells[s1].size();
+
+    for(auto s2=0; s2<=s1; ++s2) {
+
+      auto bf2_first = shell2bf[s2];
+      auto n2 = shells[s2].size();
+
+      for(auto s3=0; s3<=s1; ++s3) {
+
+        auto bf3_first = shell2bf[s3];
+        auto n3 = shells[s3].size();
+
+        const auto s4_max = (s1 == s3) ? s2 : s3;
+        for(auto s4=0; s4<=s4_max; ++s4) {
+
+          std::cout << s1 << "," << s2 << "," << s3 << "," << s4 << std::endl;
+
+          auto bf4_first = shell2bf[s4];
+          auto n4 = shells[s4].size();
+
+          auto buf = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
+
+          for(auto f1=0, f1234=0; f1!=n1; ++f1) {
+            const auto bf1 = f1 + bf1_first;
+            for(auto f2=0; f2!=n2; ++f2) {
+              const auto bf2 = f2 + bf2_first;
+              for(auto f3=0; f3!=n3; ++f3) {
+                const auto bf3 = f3 + bf3_first;
+                for(auto f4=0; f4!=n4; ++f4, ++f1234) {
+                  const auto bf4 = f4 + bf4_first;
+                  const auto value = buf[f1234];
+
+                  assert(false);
+                }
+              }
+            }
+          }
+
+        }
+      }
+    }
+  }
+
+  assert(false);
+
+  return G;
 }
