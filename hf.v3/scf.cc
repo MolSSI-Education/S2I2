@@ -551,10 +551,16 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
           auto buf = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
 
           // ANSWER
-          // each shell set of integrals contributes up to 6 shell sets of the Fock matrix:
-          // F(a,b) += 2 * (ab|cd) * D(c,d)
-          // F(c,d) += 2 * (ab|cd) * D(a,b)
-          // etc. ... see the code
+          // 1) each shell set of integrals contributes up to 6 shell sets of the Fock matrix:
+          //    F(a,b) += (ab|cd) * D(c,d)
+          //    F(c,d) += (ab|cd) * D(a,b)
+          //    F(b,d) -= 1/4 * (ab|cd) * D(a,c)
+          //    F(b,c) -= 1/4 * (ab|cd) * D(a,d)
+          //    F(a,c) -= 1/4 * (ab|cd) * D(b,d)
+          //    F(a,d) -= 1/4 * (ab|cd) * D(b,c)
+          // 2) each permutationally-unique integral (shell set) must be scaled by its degeneracy,
+          //    i.e. the number of the integrals/sets equivalent to it
+          // 3) the end result must be symmetrized
           for(auto f1=0, f1234=0; f1!=n1; ++f1) {
             const auto bf1 = f1 + bf1_first;
             for(auto f2=0; f2!=n2; ++f2) {
