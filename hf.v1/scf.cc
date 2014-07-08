@@ -1,3 +1,10 @@
+//
+// authors: T. Daniel Crawford (crawdad@vt.edu) & Ed Valeev (eduard@valeyev.net)
+// date  : July 8, 2014
+// the use of this software is permitted under the conditions GNU General
+// Public License (GPL) version 2
+//
+
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -292,8 +299,7 @@ double** read_1e_ints(const char* filename, int nao) {
 }
 
 double* read_2e_ints(const char* filename, int nao) {
-  double* result = init_array((nao * (nao + 1) / 2) * ((nao * (nao + 1) / 2) + 1) / 2);
-
+  double* result = init_array((nao*(nao+1)/2)*((nao*(nao+1)/2)+1)/2);
   std::ifstream is(filename);
   assert(is.good());
 
