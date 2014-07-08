@@ -1,3 +1,9 @@
+//
+// author: Ed Valeev (eduard@valeyev.net)
+// date  : July 8, 2014
+// the use of this software is permitted under the conditions GNU General Public License (GPL) version 2
+//
+
 #include <cmath>
 #include <iostream>
 #include <fstream>
