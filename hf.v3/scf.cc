@@ -152,22 +152,6 @@ int main(int argc, char *argv[]) {
       // build a new Fock matrix
       auto F = H;
       F += compute_2body_fock_simple(shells, D);
-#if 0
-      for (auto i = 0; i < nao; i++)
-        for (auto j = 0; j < nao; j++) {
-          for (auto k = 0; k < nao; k++)
-            for (auto l = 0; l < nao; l++) {
-              auto ij = INDEX(i, j);
-              auto kl = INDEX(k, l);
-              auto ijkl = INDEX(ij, kl);
-              auto ik = INDEX(i, k);
-              auto jl = INDEX(j, l);
-              auto ikjl = INDEX(ik, jl);
-
-              F(i,j) += D(k,l) * (2.0 * TEI[ijkl] - TEI[ikjl]);
-            }
-        }
-#endif
 
       if (iter == 1) {
         cout << "\n\tFock Matrix:\n";
@@ -524,7 +508,7 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
                   const auto bf4 = f4 + bf4_first;
                   const auto value = buf[f1234];
 
-                  assert(false);
+                  assert(false); // not yet implemented
                 }
               }
             }
@@ -534,8 +518,6 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
       }
     }
   }
-
-  assert(false);
 
   return G;
 }
