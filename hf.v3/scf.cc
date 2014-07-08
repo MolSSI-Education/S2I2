@@ -1,3 +1,9 @@
+//
+// author: Ed Valeev (eduard@valeyev.net)
+// date  : July 8, 2014
+// the use of this software is permitted under the conditions GNU General Public License (GPL) version 2
+//
+
 #include <cmath>
 #include <iostream>
 #include <fstream>
@@ -12,8 +18,6 @@
 
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
         Matrix;  // import dense, dynamically sized Matrix type from Eigen; this is row-major to meet the assumption of the integral library
-
-#define INDEX(i,j) ((i>j) ? (((i)*((i)+1)/2)+(j)) : (((j)*((j)+1)/2)+(i)))
 
 struct Atom {
     int atomic_number;
