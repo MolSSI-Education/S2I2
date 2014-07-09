@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iomanip>
 #include <vector>
+#include <chrono>
 
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
@@ -133,7 +134,7 @@ int main(int argc, char *argv[]) {
         ehf += 2.0 * D(i,j) * H(i,j);
 
     std::cout <<
-        "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)\n";
+        "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)         Time(s)\n";
     printf(" %02d %20.12f %20.12f\n", 0, ehf, ehf + enuc);
 
 
@@ -147,6 +148,7 @@ int main(int argc, char *argv[]) {
     auto rmsd = 0.0;
     auto ediff = 0.0;
     do {
+      const auto tstart = std::chrono::system_clock::now();
       ++iter;
 
       // Save a copy of the energy and the density
@@ -182,8 +184,11 @@ int main(int argc, char *argv[]) {
       ediff = ehf - ehf_last;
       rmsd = (D - D_last).norm();
 
-      printf(" %02d %20.12f %20.12f %20.12f %20.12f\n", iter, ehf, ehf + enuc,
-             ediff, rmsd);
+      const auto tstop = std::chrono::system_clock::now();
+      const std::chrono::duration<double> time_elapsed = tstop - tstart;
+
+      printf(" %02d %20.12f %20.12f %20.12f %20.12f %10.5lf\n", iter, ehf, ehf + enuc,
+             ediff, rmsd, time_elapsed.count());
 
     } while (((fabs(ediff) > conv) || (fabs(rmsd) > conv)) && (iter < maxiter));
 
