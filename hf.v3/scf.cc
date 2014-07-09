@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <iomanip>
 #include <vector>
 #include <chrono>
@@ -34,6 +35,7 @@ std::vector<Atom> read_geometry(const std::string& filename);
 std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms);
 size_t nbasis(const std::vector<libint2::Shell>& shells);
 std::vector<size_t> map_shell_to_basis_function(const std::vector<libint2::Shell>& shells);
+Matrix compute_soad(const std::vector<Atom>& atoms);
 Matrix compute_1body_ints(const std::vector<libint2::Shell>& shells,
                           libint2::OneBodyEngine::type t,
                           const std::vector<Atom>& atoms = std::vector<Atom>());
@@ -57,8 +59,9 @@ int main(int argc, char *argv[]) {
     /*** initialize molecule         ***/
     /*** =========================== ***/
 
-    // read geometry from a file
-    std::vector<Atom> atoms = read_geometry("h2o.geom");
+    // read geometry from a file; by default read from h2o.geom, else take filename (.xyz or .geom) from the command line
+    const auto filename = (argc > 1) ? argv[1] : "h2o.geom";
+    std::vector<Atom> atoms = read_geometry(filename);
 
     // count the number of electrons
     auto nelectron = 0;
@@ -123,29 +126,29 @@ int main(int argc, char *argv[]) {
     /*** build initial-guess density ***/
     /*** =========================== ***/
 
-    // solve H C = e S C
-    Eigen::GeneralizedSelfAdjointEigenSolver<Matrix> gen_eig_solver(H, S);
-    auto eps = gen_eig_solver.eigenvalues();
-    auto C = gen_eig_solver.eigenvectors();
-    cout << "\n\tInitial C Matrix:\n";
-    cout << C << endl;
+    const auto use_hcore_guess = false;  // use core Hamiltonian eigenstates to guess density?
+                                         // set to true to match the result of versions 0, 1, and 2 of the code
+                                         // HOWEVER !!! even for medium-size molecules hcore will usually fail !!!
+                                         // thus set to false to use Superposition-Of-Atomic-Densities (SOAD) guess
+    Matrix D;
+    if (use_hcore_guess) { // hcore guess
+      // solve H C = e S C
+      Eigen::GeneralizedSelfAdjointEigenSolver<Matrix> gen_eig_solver(H, S);
+      auto eps = gen_eig_solver.eigenvalues();
+      auto C = gen_eig_solver.eigenvectors();
+      cout << "\n\tInitial C Matrix:\n";
+      cout << C << endl;
 
-    // compute density, D = C(occ) . C(occ)T
-    auto C_occ = C.leftCols(ndocc);
-    Matrix D = C_occ * C_occ.transpose();
+      // compute density, D = C(occ) . C(occ)T
+      auto C_occ = C.leftCols(ndocc);
+      D = C_occ * C_occ.transpose();
+    }
+    else {  // SOAD as the guess density, assumes STO-nG basis
+      D = compute_soad(atoms);
+    }
+
     cout << "\n\tInitial Density Matrix:\n";
     cout << D << endl;
-
-    // compute HF energy
-    auto ehf = 0.0;
-    for (auto i = 0; i < nao; i++)
-      for (auto j = 0; j < nao; j++)
-        ehf += 2.0 * D(i,j) * H(i,j);
-
-    std::cout <<
-        "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)         Time(s)\n";
-    printf(" %02d %20.12f %20.12f\n", 0, ehf, ehf + enuc);
-
 
     /*** =========================== ***/
     /*** main iterative loop         ***/
@@ -156,6 +159,7 @@ int main(int argc, char *argv[]) {
     auto iter = 0;
     auto rmsd = 0.0;
     auto ediff = 0.0;
+    auto ehf = 0.0;
     do {
       const auto tstart = std::chrono::system_clock::now();
       ++iter;
@@ -196,6 +200,9 @@ int main(int argc, char *argv[]) {
       const auto tstop = std::chrono::system_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
 
+      if (iter == 1)
+        std::cout <<
+        "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)         Time(s)\n";
       printf(" %02d %20.12f %20.12f %20.12f %20.12f %10.5lf\n", iter, ehf, ehf + enuc,
              ediff, rmsd, time_elapsed.count());
 
@@ -203,7 +210,7 @@ int main(int argc, char *argv[]) {
 
     libint2::cleanup(); // done with libint
 
-  } // end of try block; if any exceptions occured, report them and exit cleanly
+  } // end of try block; if any exceptions occurred, report them and exit cleanly
 
   catch (const char* ex) {
     cerr << "caught exception: " << ex << endl;
@@ -225,20 +232,85 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
-
-std::vector<Atom> read_geometry(const std::string& filename) {
-
-  std::ifstream is(filename);
-  assert(is.good());
-
+// this reads the geometry in the same format used in older versions of the code
+std::vector<Atom> read_dotgeom(std::istream& is) {
   size_t natom;
   is >> natom;
 
   std::vector<Atom> atoms(natom);
-  for (int i = 0; i < natom; i++)
+  for (auto i = 0; i < natom; i++)
     is >> atoms[i].atomic_number >> atoms[i].x >> atoms[i].y >> atoms[i].z;
 
   return atoms;
+}
+
+// this reads the geometry in the standard xyz format supported by most chemistry software
+std::vector<Atom> read_dotxyz(std::istream& is) {
+  size_t natom;
+  is >> natom;
+
+  std::string comment;
+  std::getline(is, comment);
+
+  std::vector<Atom> atoms(natom);
+  for (auto i = 0; i < natom; i++) {
+    std::string element_label;
+    double x, y, z;
+    is >> element_label >> x >> y >> z;
+
+    // .xyz files report element labels, hence convert to atomic numbers
+    int Z;
+    if (element_label == "H")
+      Z = 1;
+    else if (element_label == "C")
+      Z = 6;
+    else if (element_label == "N")
+      Z = 7;
+    else if (element_label == "O")
+      Z = 8;
+    else if (element_label == "F")
+      Z = 9;
+    else if (element_label == "S")
+      Z = 16;
+    else if (element_label == "Cl")
+      Z = 17;
+    else {
+      std::cerr << "read_dotxyz: element label \"" << element_label << "\" is not recognized" << std::endl;
+      throw "Did not recognize element label in .xyz file";
+    }
+
+    atoms[i].atomic_number = Z;
+
+    // .xyz files report Cartesian coordinates in angstroms; convert to bohr
+    const auto angstrom_to_bohr = 1 / 0.52917721092; // 2010 CODATA value
+    atoms[i].x = x * angstrom_to_bohr;
+    atoms[i].y = y * angstrom_to_bohr;
+    atoms[i].z = z * angstrom_to_bohr;
+  }
+
+  return atoms;
+}
+
+std::vector<Atom> read_geometry(const std::string& filename) {
+
+  std::cout << "Will read geometry from " << filename << std::endl;
+  std::ifstream is(filename);
+  assert(is.good());
+
+  // to prepare for MPI parallelization, we will read the entire file into a string that can be
+  // broadcast to everyone, then converted to an std::istringstream object that can be used just like std::ifstream
+  std::ostringstream oss;
+  oss << is.rdbuf();
+  // use ss.str() to get the entire contents of the file as an std::string
+  // broadcast
+  // then make an std::istringstream in each process
+  std::istringstream iss(oss.str());
+
+  // check the extension: if .xyz, assume the standard XYZ format, otherwise use the same format used by hf.v1
+  if ( filename.rfind(".xyz") != std::string::npos)
+    return read_dotxyz(iss);
+  else
+    return read_dotgeom(iss);
 }
 
 std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
@@ -247,7 +319,10 @@ std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
 
   for(auto a=0; a<atoms.size(); ++a) {
 
-    // STO-3G
+    // STO-3G basis set
+    // cite: W. J. Hehre, R. F. Stewart, and J. A. Pople, The Journal of Chemical Physics 51, 2657 (1969)
+    //       doi: 10.1063/1.1672392
+    // obtained from https://bse.pnl.gov/bse/portal
     switch (atoms[a].atomic_number) {
       case 1: // Z=1: hydrogen
         shells.push_back(
@@ -283,6 +358,36 @@ std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
         shells.push_back(
             {
               {2.941249400, 0.683483100, 0.222289900},
+              { // contraction 0: p shell (l=1), spherical=false
+                {1, false, {0.15591627, 0.60768372, 0.39195739}}
+              },
+              {{atoms[a].x, atoms[a].y, atoms[a].z}}
+            }
+        );
+        break;
+
+      case 7: // Z=7: nitrogen
+        shells.push_back(
+            {
+              {99.106169000, 18.052312000, 4.885660200},
+              {
+                {0, false, {0.15432897, 0.53532814, 0.44463454}}
+              },
+              {{atoms[a].x, atoms[a].y, atoms[a].z}}
+            }
+        );
+        shells.push_back(
+            {
+              {3.780455900, 0.878496600, 0.285714400},
+              {
+                {0, false, {-0.09996723, 0.39951283, 0.70011547}}
+              },
+              {{atoms[a].x, atoms[a].y, atoms[a].z}}
+            }
+        );
+        shells.push_back(
+            {
+          {3.780455900, 0.878496600, 0.285714400},
               { // contraction 0: p shell (l=1), spherical=false
                 {1, false, {0.15591627, 0.60768372, 0.39195739}}
               },
@@ -368,6 +473,45 @@ std::vector<size_t> map_shell_to_basis_function(const std::vector<libint2::Shell
   }
 
   return result;
+}
+
+// computes Superposition-Of-Atomic-Densities guess for the molecular density matrix
+// basically assumes minimal basis and occupies subshell by smearing electrons evenly over the orbitals
+Matrix compute_soad(const std::vector<Atom>& atoms) {
+
+  // compute number of atomic orbitals
+  size_t nao = 0;
+  for(const auto& atom: atoms) {
+    const auto Z = atom.atomic_number;
+    if (Z == 1 || Z == 2) // H, He
+      nao += 1;
+    else if (Z <= 10) // Li - Ne
+      nao += 5;
+    else
+      throw "SOAD with Z > 10 is not yet supported";
+  }
+
+  // compute the density
+  Matrix D = Matrix::Zero(nao, nao);
+  size_t ao_offset = 0; // first AO of this atom
+  for(const auto& atom: atoms) {
+    const auto Z = atom.atomic_number;
+    if (Z == 1 || Z == 2) { // H, He
+      D(ao_offset, ao_offset) = Z; // all electrons go to the 1s
+      ao_offset += 1;
+    }
+    else if (Z <= 10) {
+      D(ao_offset, ao_offset) = 2; // 2 electrons go to the 1s
+      D(ao_offset+1, ao_offset+1) = (Z == 3) ? 1 : 2; // Li? only 1 electron in 2s, else 2 electrons
+      // smear the remaining electrons in 2p orbitals
+      const double num_electrons_per_2p = (Z > 4) ? (double)(Z - 4)/3 : 0;
+      for(auto xyz=0; xyz!=3; ++xyz)
+        D(ao_offset+2+xyz, ao_offset+2+xyz) = num_electrons_per_2p;
+      ao_offset += 5;
+    }
+  }
+
+  return D * 0.5; // we use densities normalized to # of electrons/2
 }
 
 Matrix compute_1body_ints(const std::vector<libint2::Shell>& shells,
