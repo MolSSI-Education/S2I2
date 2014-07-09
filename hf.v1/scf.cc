@@ -1,77 +1,89 @@
+//
+// authors: T. Daniel Crawford (crawdad@vt.edu) & Ed Valeev (eduard@valeyev.net)
+// date  : July 8, 2014
+// the use of this software is permitted under the conditions GNU General
+// Public License (GPL) version 2
+//
+
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
 #include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <vector>
+#include <cassert>
 
 #include "diag.h"
 #include "mmult.h"
 
 #define INDEX(i,j) ((i>j) ? (((i)*((i)+1)/2)+(j)) : (((j)*((j)+1)/2)+(i)))
 
-void read_geometry(const char* filename, int& natom, double*& zval,
-                   double*& x, double*& y, double*& z);
+struct Atom {
+    int Z;
+    double x, y, z;
+};
+
+void read_geometry(const char*, std::vector<Atom>&);
 double** read_1e_ints(const char* filename, int nao);
 double* read_2e_ints(const char* filename, int nao);
 
 int main(int argc, char *argv[]) {
 
   try {
-    int i, j, k, l, ij, kl, ijkl, ik, jl, ikjl;
-    int natom, ndocc, nao, iter = 0, maxiter = 100;
-    double enuc, escf, escf_last, ediff, rmsd, conv = 1e-12;
-    double **S, **T, **V, **H, **F, *TEI;
-    double **X, **Fp, **C, **D, **D_last;
-    double *eps;
+    double **X, **F, **Fp, **C, **D, **D_last, *eps;
     double **evecs, *evals, **TMP;
-    double *zval, *x, *y, *z;
 
     /*** =========================== ***/
     /*** initialize integrals, etc.  ***/
     /*** =========================== ***/
 
     // read geometry from xyz file
-    read_geometry("geom.dat", natom, zval, x, y, z);
+    std::vector<Atom> atoms;
+    read_geometry("geom.dat", atoms);
 
     // count the number of electrons
     int nelectron = 0;
-    for (i = 0; i < natom; i++)
-      nelectron += zval[i];
-    ndocc = nelectron / 2;
+    for (unsigned int i = 0; i < atoms.size(); i++) nelectron += atoms[i].Z;
+    int ndocc = nelectron / 2;
 
     /* nuclear repulsion energy */
-    enuc = 0.0;
-    for (i = 0; i < natom; i++)
-      for (j = i + 1; j < natom; j++) {
-        const double r2 = (x[i] - x[j]) * (x[i] - x[j])
-            + (y[i] - y[j]) * (y[i] - y[j]) + (z[i] - z[j]) * (z[i] - z[j]);
-        const double r = sqrt(r2);
-        enuc += zval[i] * zval[j] / r;
+    double enuc = 0.0;
+    for (unsigned int i = 0; i < atoms.size(); i++)
+      for (unsigned int j = i + 1; j < atoms.size(); j++) {
+        double xij = atoms[i].x - atoms[j].x;
+        double yij = atoms[i].y - atoms[j].y;
+        double zij = atoms[i].z - atoms[j].z;
+        double r2 = xij*xij + yij*yij + zij*zij;
+        double r = sqrt(r2);
+        enuc += atoms[i].Z * atoms[j].Z / r;
       }
     printf("\tNuclear repulsion energy = %20.10lf\n", enuc);
 
     /* Have the user input some key data */
+    int nao;
     printf("\nEnter the number of AOs: ");
     scanf("%d", &nao);
 
     /* overlap integrals */
-    S = read_1e_ints("s.dat", nao);
+    double **S = read_1e_ints("s.dat", nao);
     printf("\n\tOverlap Integrals:\n");
     print_mat(S, nao, nao, stdout);
 
     /* kinetic-energy integrals */
-    T = read_1e_ints("t.dat", nao);
+    double **T = read_1e_ints("t.dat", nao);
     printf("\n\tKinetic-Energy Integrals:\n");
     print_mat(T, nao, nao, stdout);
 
     /* nuclear-attraction integrals */
-    V = read_1e_ints("v.dat", nao);
+    double **V = read_1e_ints("v.dat", nao);
     printf("\n\tNuclear Attraction Integrals:\n");
     print_mat(V, nao, nao, stdout);
 
     /* Core Hamiltonian */
-    H = init_matrix(nao, nao);
-    for (i = 0; i < nao; i++)
-      for (j = 0; j < nao; j++)
+    double **H = init_matrix(nao, nao);
+    for (int i = 0; i < nao; i++)
+      for (int j = 0; j < nao; j++)
         H[i][j] = T[i][j] + V[i][j];
     printf("\n\tCore Hamiltonian:\n");
     print_mat(H, nao, nao, stdout);
@@ -80,14 +92,14 @@ int main(int argc, char *argv[]) {
     delete_matrix(V);
 
     /* two-electron integrals */
-    TEI = read_2e_ints("eri.dat", nao);
+    double *TEI = read_2e_ints("eri.dat", nao);
 
     /* build the symmetric orthogonalizer X = S^(-1/2) */
     evecs = init_matrix(nao, nao);
     evals = init_array(nao);
     diag(nao, nao, S, evals, 1, evecs, 1e-13);
-    for (i = 0; i < nao; i++) {
-      for (j = 0; j < nao; j++) {
+    for (int i = 0; i < nao; i++) {
+      for (int j = 0; j < nao; j++) {
         S[i][j] = 0.0;
       }
       S[i][i] = 1.0 / sqrt(evals[i]);
@@ -108,8 +120,8 @@ int main(int argc, char *argv[]) {
     /*** =========================== ***/
 
     F = init_matrix(nao, nao);
-    for (i = 0; i < nao; i++)
-      for (j = 0; j < nao; j++)
+    for (int i = 0; i < nao; i++)
+      for (int j = 0; j < nao; j++)
         F[i][j] = H[i][j]; /* core Hamiltonian guess */
 
     TMP = init_matrix(nao, nao);
@@ -127,17 +139,20 @@ int main(int argc, char *argv[]) {
     print_mat(C, nao, nao, stdout);
 
     D = init_matrix(nao, nao);
-    for (i = 0; i < nao; i++)
-      for (j = 0; j < nao; j++)
-        for (k = 0; k < ndocc; k++)
+    for (int i = 0; i < nao; i++)
+      for (int j = 0; j < nao; j++)
+        for (int k = 0; k < ndocc; k++)
           D[i][j] += C[i][k] * C[j][k];
     printf("\n\tInitial Density Matrix:\n");
     print_mat(D, nao, nao, stdout);
 
-    escf = 0.0;
-    for (i = 0; i < nao; i++)
-      for (j = 0; j < nao; j++)
+    double escf = 0.0;
+    for (int i = 0; i < nao; i++)
+      for (int j = 0; j < nao; j++)
         escf += D[i][j] * (H[i][j] + F[i][j]);
+
+    int iter = 0;
+    int maxiter = 1000;
 
     printf(
         "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)\n");
@@ -149,27 +164,32 @@ int main(int argc, char *argv[]) {
     /*** main iterative loop ***/
     /*** =========================== ***/
 
+    double ediff;
+    double rmsd;
+    double escf_last = 0.0;
+    double conv = 1e-12;
+
     do {
       iter++;
 
       /* Save a copy of the energy and the density */
       escf_last = escf;
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++)
+      for (int i = 0; i < nao; i++)
+        for (int j = 0; j < nao; j++)
           D_last[i][j] = D[i][j];
 
       /* build a new Fock matrix */
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++) {
+      for (int i = 0; i < nao; i++)
+        for (int j = 0; j < nao; j++) {
           F[i][j] = H[i][j];
-          for (k = 0; k < nao; k++)
-            for (l = 0; l < nao; l++) {
-              ij = INDEX(i, j);
-              kl = INDEX(k, l);
-              ijkl = INDEX(ij, kl);
-              ik = INDEX(i, k);
-              jl = INDEX(j, l);
-              ikjl = INDEX(ik, jl);
+          for (int k = 0; k < nao; k++)
+            for (int l = 0; l < nao; l++) {
+              int ij = INDEX(i, j);
+              int kl = INDEX(k, l);
+              int ijkl = INDEX(ij, kl);
+              int ik = INDEX(i, k);
+              int jl = INDEX(j, l);
+              int ikjl = INDEX(ik, jl);
 
               F[i][j] += D[k][l] * (2.0 * TEI[ijkl] - TEI[ikjl]);
             }
@@ -192,31 +212,26 @@ int main(int argc, char *argv[]) {
       zero_matrix(C, nao, nao);
       mmult(X, 0, TMP, 0, C, nao, nao, nao);
       zero_matrix(D, nao, nao);
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++)
-          for (k = 0; k < ndocc; k++)
+      for (int i = 0; i < nao; i++)
+        for (int j = 0; j < nao; j++)
+          for (int k = 0; k < ndocc; k++)
             D[i][j] += C[i][k] * C[j][k];
 
       escf = 0.0;
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++)
+      for(int i = 0; i < nao; i++)
+        for(int j = 0; j < nao; j++)
           escf += D[i][j] * (H[i][j] + F[i][j]);
 
       ediff = escf - escf_last;
       rmsd = 0.0;
-      for (i = 0; i < nao; i++)
-        for (j = 0; j < nao; j++)
+      for(int i = 0; i < nao; i++)
+        for(int j = 0; j < nao; j++)
           rmsd += (D[i][j] - D_last[i][j]) * (D[i][j] - D_last[i][j]);
 
       printf(" %02d %20.12f %20.12f %20.12f %20.12f\n", iter, escf, escf + enuc,
              ediff, sqrt(rmsd));
 
     } while (((fabs(ediff) > conv) || (fabs(rmsd) > conv)) && (iter < maxiter));
-
-    delete[] zval;
-    delete[] x;
-    delete[] y;
-    delete[] z;
 
     delete_matrix(TMP);
     delete_matrix(D_last);
@@ -251,61 +266,54 @@ int main(int argc, char *argv[]) {
   return 0;
 }
 
+void read_geometry(const char *filename, std::vector<Atom>& atoms)
+{
+  std::ifstream is(filename);
+  assert(is.good());
 
-void read_geometry(const char* filename, int& natom, double*& zval, double*& x,
-                   double*& y, double*& z) {
+  size_t natom;
+  is >> natom;
 
-  FILE* input = fopen(filename, "r");
-  if (input == NULL)
-    throw std::string("failed to open file ") + filename;
+  atoms.resize(natom);
+  for(unsigned int i = 0; i < natom; i++)
+    is >> atoms[i].Z >> atoms[i].x >> atoms[i].y >> atoms[i].z;
 
-  fscanf(input, "%d", &natom);
-
-  zval = init_array(natom);
-  x = init_array(natom);
-  y = init_array(natom);
-  z = init_array(natom);
-
-  for (int i = 0; i < natom; i++)
-    fscanf(input, "%lf%lf%lf%lf", &zval[i], &x[i], &y[i], &z[i]);
-  fclose(input);
+  is.close();
 }
 
 double** read_1e_ints(const char* filename, int nao) {
-  FILE* input = fopen(filename, "r");
-  if (input == NULL)
-    throw std::string("failed to open file ") + filename;
+  std::ifstream is(filename);
+  assert(is.good());
 
   double** result = init_matrix(nao, nao);
 
   int i, j;
   double val;
-  while (fscanf(input, "%d %d %lf", &i, &j, &val) != EOF)
+  while (!is.eof()) {
+    is >> i >> j >> val;
     result[i - 1][j - 1] = result[j - 1][i - 1] = val;
-
-  fclose(input);
+  }
+  is.close();
 
   return result;
 }
 
 double* read_2e_ints(const char* filename, int nao) {
-  double* result = init_array((nao * (nao + 1) / 2) * ((nao * (nao + 1) / 2) + 1) / 2);
-
-  FILE* input = fopen(filename, "r");
-  if (input == NULL)
-    throw std::string("failed to open file ") + filename;
+  double* result = init_array((nao*(nao+1)/2)*((nao*(nao+1)/2)+1)/2);
+  std::ifstream is(filename);
+  assert(is.good());
 
   int i, j, k, l;
   double val;
-  while (fscanf(input, "%d %d %d %d %lf", &i, &j, &k, &l, &val) != EOF) {
+  while (!is.eof()) {
+    is >> i >> j >> k >> l >> val;
     long ij = INDEX(i - 1, j - 1);
     long kl = INDEX(k - 1, l - 1);
     long ijkl = INDEX(ij, kl);
-
     result[ijkl] = val;
   }
-
-  fclose(input);
+  is.close();
 
   return result;
 }
+

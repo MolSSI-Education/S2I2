@@ -18,6 +18,6 @@ hf.v2: the integrals-on-disk C++ version using matrix package Eigen
   * sprinkles of C++11 to save typing ... any recent C++ compiler will do
 
 hf.v3: the integral-direct C++ version
-  * will be based on v2
+  * is based on v2, uses libint-2.1.0-beta as the integral engine
 
 ### *parallel* HF
