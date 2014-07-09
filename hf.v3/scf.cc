@@ -34,6 +34,7 @@ std::vector<Atom> read_geometry(const std::string& filename);
 std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms);
 size_t nbasis(const std::vector<libint2::Shell>& shells);
 std::vector<size_t> map_shell_to_basis_function(const std::vector<libint2::Shell>& shells);
+Matrix compute_soad(const std::vector<Atom>& atoms);
 Matrix compute_1body_ints(const std::vector<libint2::Shell>& shells,
                           libint2::OneBodyEngine::type t,
                           const std::vector<Atom>& atoms = std::vector<Atom>());
@@ -123,16 +124,27 @@ int main(int argc, char *argv[]) {
     /*** build initial-guess density ***/
     /*** =========================== ***/
 
-    // solve H C = e S C
-    Eigen::GeneralizedSelfAdjointEigenSolver<Matrix> gen_eig_solver(H, S);
-    auto eps = gen_eig_solver.eigenvalues();
-    auto C = gen_eig_solver.eigenvectors();
-    cout << "\n\tInitial C Matrix:\n";
-    cout << C << endl;
+    const auto use_hcore_guess = false;  // use core Hamiltonian eigenstates to guess density?
+                                         // set to true to match the result of versions 0, 1, and 2 of the code
+                                         // HOWEVER!!! even for medium size molecules hcore will be a bad choice
+                                         // set to false to switch to Superposition-Of-Atomic-Densities (SOAD) guess
+    Matrix D;
+    if (use_hcore_guess) { // hcore guess
+      // solve H C = e S C
+      Eigen::GeneralizedSelfAdjointEigenSolver<Matrix> gen_eig_solver(H, S);
+      auto eps = gen_eig_solver.eigenvalues();
+      auto C = gen_eig_solver.eigenvectors();
+      cout << "\n\tInitial C Matrix:\n";
+      cout << C << endl;
 
-    // compute density, D = C(occ) . C(occ)T
-    auto C_occ = C.leftCols(ndocc);
-    Matrix D = C_occ * C_occ.transpose();
+      // compute density, D = C(occ) . C(occ)T
+      auto C_occ = C.leftCols(ndocc);
+      D = C_occ * C_occ.transpose();
+    }
+    else {  // SOAD as the guess density, assumes STO-nG basis
+      D = compute_soad(atoms);
+    }
+
     cout << "\n\tInitial Density Matrix:\n";
     cout << D << endl;
 
@@ -368,6 +380,43 @@ std::vector<size_t> map_shell_to_basis_function(const std::vector<libint2::Shell
   }
 
   return result;
+}
+
+Matrix compute_soad(const std::vector<Atom>& atoms) {
+
+  // compute number of atomic orbitals
+  size_t nao = 0;
+  for(const auto& atom: atoms) {
+    const auto Z = atom.atomic_number;
+    if (Z == 1 || Z == 2) // H, He
+      nao += 1;
+    else if (Z <= 10) // Li - Ne
+      nao += 5;
+    else
+      throw "SOAD with Z > 10 is not yet supported";
+  }
+
+  // compute the density
+  Matrix D = Matrix::Zero(nao, nao);
+  size_t ao_offset = 0; // first AO of this atom
+  for(const auto& atom: atoms) {
+    const auto Z = atom.atomic_number;
+    if (Z == 1 || Z == 2) { // H, He
+      D(ao_offset, ao_offset) = Z; // all electrons go to the 1s
+      ao_offset += 1;
+    }
+    else if (Z <= 10) {
+      D(ao_offset, ao_offset) = 2; // 2 electrons go to the 1s
+      D(ao_offset+1, ao_offset+1) = (Z == 3) ? 1 : 2; // Li? only 1 electron in 2s, else 2 electrons
+      // smear the remaining electrons in 2p orbitals
+      const double num_electrons_per_2p = (Z > 4) ? (double)(Z - 4)/3 : 0;
+      for(auto xyz=0; xyz!=3; ++xyz)
+        D(ao_offset+2+xyz, ao_offset+2+xyz) = num_electrons_per_2p;
+      ao_offset += 5;
+    }
+  }
+
+  return D * 0.5; // we use densities normalized to # of electrons/2
 }
 
 Matrix compute_1body_ints(const std::vector<libint2::Shell>& shells,
