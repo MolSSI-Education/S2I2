@@ -4,27 +4,33 @@
 // the use of this software is permitted under the conditions GNU General Public License (GPL) version 2
 //
 
+// standard C++ headers
 #include <cmath>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
 #include <vector>
+#include <chrono>
 
+// Eigen matrix algebra library
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
 
+// Libint Gaussian integrals library
 #include <libint2.h>
 #include <libint2/cxxapi.h>
 
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-        Matrix;  // import dense, dynamically sized Matrix type from Eigen; this is row-major to meet the assumption of the integral library
+        Matrix;  // import dense, dynamically sized Matrix type from Eigen;
+                 // this is a matrix with row-major storage (http://en.wikipedia.org/wiki/Row-major_order)
+                 // to meet the layout of the integrals returned by the Libint integral library
 
 struct Atom {
     int atomic_number;
     double x, y, z;
 };
 
-void read_geometry(const std::string& filename, std::vector<Atom>& atoms);
+std::vector<Atom> read_geometry(const std::string& filename);
 std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms);
 size_t nbasis(const std::vector<libint2::Shell>& shells);
 std::vector<size_t> map_shell_to_basis_function(const std::vector<libint2::Shell>& shells);
@@ -47,15 +53,12 @@ int main(int argc, char *argv[]) {
 
   try {
 
-    libint2::init();
-
     /*** =========================== ***/
-    /*** initialize integrals, etc.  ***/
+    /*** initialize molecule         ***/
     /*** =========================== ***/
 
     // read geometry from a file
-    std::vector<Atom> atoms;
-    read_geometry("h2o.geom", atoms);
+    std::vector<Atom> atoms = read_geometry("h2o.geom");
 
     // count the number of electrons
     auto nelectron = 0;
@@ -84,6 +87,13 @@ int main(int argc, char *argv[]) {
     size_t nao = 0;
     for (auto s=0; s<shells.size(); ++s)
       nao += shells[s].size();
+
+    /*** =========================== ***/
+    /*** compute 1-e integrals       ***/
+    /*** =========================== ***/
+
+    // initializes the Libint integrals library ... now ready to compute
+    libint2::init();
 
     // compute overlap integrals
     auto S = compute_1body_ints(shells, libint2::OneBodyEngine::overlap);
@@ -133,12 +143,12 @@ int main(int argc, char *argv[]) {
         ehf += 2.0 * D(i,j) * H(i,j);
 
     std::cout <<
-        "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)\n";
+        "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)         Time(s)\n";
     printf(" %02d %20.12f %20.12f\n", 0, ehf, ehf + enuc);
 
 
     /*** =========================== ***/
-    /*** main iterative loop ***/
+    /*** main iterative loop         ***/
     /*** =========================== ***/
 
     const auto maxiter = 100;
@@ -147,6 +157,7 @@ int main(int argc, char *argv[]) {
     auto rmsd = 0.0;
     auto ediff = 0.0;
     do {
+      const auto tstart = std::chrono::system_clock::now();
       ++iter;
 
       // Save a copy of the energy and the density
@@ -182,14 +193,17 @@ int main(int argc, char *argv[]) {
       ediff = ehf - ehf_last;
       rmsd = (D - D_last).norm();
 
-      printf(" %02d %20.12f %20.12f %20.12f %20.12f\n", iter, ehf, ehf + enuc,
-             ediff, rmsd);
+      const auto tstop = std::chrono::system_clock::now();
+      const std::chrono::duration<double> time_elapsed = tstop - tstart;
+
+      printf(" %02d %20.12f %20.12f %20.12f %20.12f %10.5lf\n", iter, ehf, ehf + enuc,
+             ediff, rmsd, time_elapsed.count());
 
     } while (((fabs(ediff) > conv) || (fabs(rmsd) > conv)) && (iter < maxiter));
 
     libint2::cleanup(); // done with libint
 
-  } // end of try block
+  } // end of try block; if any exceptions occured, report them and exit cleanly
 
   catch (const char* ex) {
     cerr << "caught exception: " << ex << endl;
@@ -212,7 +226,7 @@ int main(int argc, char *argv[]) {
 }
 
 
-void read_geometry(const std::string& filename, std::vector<Atom>& atoms) {
+std::vector<Atom> read_geometry(const std::string& filename) {
 
   std::ifstream is(filename);
   assert(is.good());
@@ -220,10 +234,11 @@ void read_geometry(const std::string& filename, std::vector<Atom>& atoms) {
   size_t natom;
   is >> natom;
 
-  atoms.resize(natom);
+  std::vector<Atom> atoms(natom);
   for (int i = 0; i < natom; i++)
     is >> atoms[i].atomic_number >> atoms[i].x >> atoms[i].y >> atoms[i].z;
 
+  return atoms;
 }
 
 std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
@@ -312,6 +327,7 @@ std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
 
   }
 
+  // technical step: rescale contraction coefficients to include primitive normalization coefficients
   for(auto& s: shells) {
     s.renorm();
   }
@@ -388,10 +404,10 @@ Matrix compute_1body_ints(const std::vector<libint2::Shell>& shells,
       auto n2 = shells[s2].size();
 
       // compute shell pair; return is the pointer to the buffer
-      auto buf = engine.compute(shells[s1], shells[s2]);
+      const auto* buf = engine.compute(shells[s1], shells[s2]);
 
-      // "map" buffer to an Eigen Matrix, and copy it to the corresponding blocks of the result
-      Eigen::Map<Matrix> buf_mat(buf, n1, n2);
+      // "map" buffer to a const Eigen Matrix, and copy it to the corresponding blocks of the result
+      Eigen::Map<const Matrix> buf_mat(buf, n1, n2);
       result.block(bf1, bf2, n1, n2) = buf_mat;
       if (s1 != s2) // if s1 >= s2, copy {s1,s2} to the corresponding {s2,s1} block, note the transpose!
       result.block(bf2, bf1, n2, n1) = buf_mat.transpose();
@@ -438,7 +454,7 @@ Matrix compute_2body_fock_simple(const std::vector<libint2::Shell>& shells,
           auto n4 = shells[s4].size();
 
           // Coulomb contribution to the Fock matrix is from {s1,s2,s3,s4} integrals
-          auto buf_1234 = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
+          const auto* buf_1234 = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
 
           // we don't have an analog of Eigen for tensors (yet ... see github.com/BTAS/BTAS, under development)
           // hence some manual labor here:
@@ -459,7 +475,7 @@ Matrix compute_2body_fock_simple(const std::vector<libint2::Shell>& shells,
           }
 
           // exchange contribution to the Fock matrix is from {s1,s3,s2,s4} integrals
-          auto buf_1324 = engine.compute(shells[s1], shells[s3], shells[s2], shells[s4]);
+          const auto* buf_1324 = engine.compute(shells[s1], shells[s3], shells[s2], shells[s4]);
 
           for(auto f1=0, f1324=0; f1!=n1; ++f1) {
             const auto bf1 = f1 + bf1_first;
@@ -484,7 +500,7 @@ Matrix compute_2body_fock_simple(const std::vector<libint2::Shell>& shells,
 }
 
 Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
-                                 const Matrix& D) {
+                          const Matrix& D) {
 
   const auto n = nbasis(shells);
   Matrix G = Matrix::Zero(n,n);
@@ -531,8 +547,6 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
       auto bf2_first = shell2bf[s2];
       auto n2 = shells[s2].size();
 
-      auto s12_deg = (s1 == s2) ? 1.0 : 2.0;
-
       for(auto s3=0; s3<=s1; ++s3) {
 
         auto bf3_first = shell2bf[s3];
@@ -544,11 +558,13 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
           auto bf4_first = shell2bf[s4];
           auto n4 = shells[s4].size();
 
+          // compute the permutational degeneracy (i.e. # of equivalents) of the given shell set
+          auto s12_deg = (s1 == s2) ? 1.0 : 2.0;
           auto s34_deg = (s3 == s4) ? 1.0 : 2.0;
           auto s12_34_deg = (s1 == s3) ? (s2 == s4 ? 1.0 : 2.0) : 2.0;
           auto s1234_deg = s12_deg * s34_deg * s12_34_deg;
 
-          auto buf = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
+          const auto* buf = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
 
           // ANSWER
           // 1) each shell set of integrals contributes up to 6 shell sets of the Fock matrix:
