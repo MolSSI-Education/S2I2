@@ -8,6 +8,7 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <iomanip>
 #include <vector>
 #include <chrono>
@@ -292,14 +293,24 @@ std::vector<Atom> read_dotxyz(std::istream& is) {
 
 std::vector<Atom> read_geometry(const std::string& filename) {
 
+  std::cout << "Will read geometry from " << filename << std::endl;
   std::ifstream is(filename);
   assert(is.good());
 
-  // check the extension: if .xyz, assume the xyz format, otherwise use the same format used by hf.v1
+  // to prepare for MPI parallelization, we will read the entire file into a string that can be
+  // broadcast to everyone, then converted to an std::istringstream object that can be used just like std::ifstream
+  std::ostringstream oss;
+  oss << is.rdbuf();
+  // use ss.str() to get the entire contents of the file as an std::string
+  // broadcast
+  // then make an std::istringstream in each process
+  std::istringstream iss(oss.str());
+
+  // check the extension: if .xyz, assume the standard XYZ format, otherwise use the same format used by hf.v1
   if ( filename.rfind(".xyz") != std::string::npos)
-    return read_dotxyz(is);
+    return read_dotxyz(iss);
   else
-    return read_dotgeom(is);
+    return read_dotgeom(iss);
 }
 
 std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
