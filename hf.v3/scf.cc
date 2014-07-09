@@ -210,7 +210,7 @@ int main(int argc, char *argv[]) {
 
     libint2::cleanup(); // done with libint
 
-  } // end of try block; if any exceptions occured, report them and exit cleanly
+  } // end of try block; if any exceptions occurred, report them and exit cleanly
 
   catch (const char* ex) {
     cerr << "caught exception: " << ex << endl;
