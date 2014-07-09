@@ -149,17 +149,6 @@ int main(int argc, char *argv[]) {
     cout << "\n\tInitial Density Matrix:\n";
     cout << D << endl;
 
-    // compute HF energy
-    auto ehf = 0.0;
-    for (auto i = 0; i < nao; i++)
-      for (auto j = 0; j < nao; j++)
-        ehf += 2.0 * D(i,j) * H(i,j);
-
-    std::cout <<
-        "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)         Time(s)\n";
-    printf(" %02d %20.12f %20.12f\n", 0, ehf, ehf + enuc);
-
-
     /*** =========================== ***/
     /*** main iterative loop         ***/
     /*** =========================== ***/
@@ -169,6 +158,7 @@ int main(int argc, char *argv[]) {
     auto iter = 0;
     auto rmsd = 0.0;
     auto ediff = 0.0;
+    auto ehf = 0.0;
     do {
       const auto tstart = std::chrono::system_clock::now();
       ++iter;
@@ -209,6 +199,9 @@ int main(int argc, char *argv[]) {
       const auto tstop = std::chrono::system_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
 
+      if (iter == 1)
+        std::cout <<
+        "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)         Time(s)\n";
       printf(" %02d %20.12f %20.12f %20.12f %20.12f %10.5lf\n", iter, ehf, ehf + enuc,
              ediff, rmsd, time_elapsed.count());
 
