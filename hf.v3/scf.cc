@@ -259,7 +259,10 @@ std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
 
   for(auto a=0; a<atoms.size(); ++a) {
 
-    // STO-3G
+    // STO-3G basis set
+    // cite: W. J. Hehre, R. F. Stewart, and J. A. Pople, The Journal of Chemical Physics 51, 2657 (1969)
+    //       doi: 10.1063/1.1672392
+    // obtained from https://bse.pnl.gov/bse/portal
     switch (atoms[a].atomic_number) {
       case 1: // Z=1: hydrogen
         shells.push_back(
@@ -295,6 +298,36 @@ std::vector<libint2::Shell> make_sto3g_basis(const std::vector<Atom>& atoms) {
         shells.push_back(
             {
               {2.941249400, 0.683483100, 0.222289900},
+              { // contraction 0: p shell (l=1), spherical=false
+                {1, false, {0.15591627, 0.60768372, 0.39195739}}
+              },
+              {{atoms[a].x, atoms[a].y, atoms[a].z}}
+            }
+        );
+        break;
+
+      case 7: // Z=7: nitrogen
+        shells.push_back(
+            {
+              {99.106169000, 18.052312000, 4.885660200},
+              {
+                {0, false, {0.15432897, 0.53532814, 0.44463454}}
+              },
+              {{atoms[a].x, atoms[a].y, atoms[a].z}}
+            }
+        );
+        shells.push_back(
+            {
+              {3.780455900, 0.878496600, 0.285714400},
+              {
+                {0, false, {-0.09996723, 0.39951283, 0.70011547}}
+              },
+              {{atoms[a].x, atoms[a].y, atoms[a].z}}
+            }
+        );
+        shells.push_back(
+            {
+          {3.780455900, 0.878496600, 0.285714400},
               { // contraction 0: p shell (l=1), spherical=false
                 {1, false, {0.15591627, 0.60768372, 0.39195739}}
               },
