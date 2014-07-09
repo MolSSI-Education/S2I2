@@ -128,8 +128,8 @@ int main(int argc, char *argv[]) {
 
     const auto use_hcore_guess = false;  // use core Hamiltonian eigenstates to guess density?
                                          // set to true to match the result of versions 0, 1, and 2 of the code
-                                         // HOWEVER!!! even for medium size molecules hcore will be a bad choice
-                                         // set to false to switch to Superposition-Of-Atomic-Densities (SOAD) guess
+                                         // HOWEVER !!! even for medium-size molecules hcore will usually fail !!!
+                                         // thus set to false to use Superposition-Of-Atomic-Densities (SOAD) guess
     Matrix D;
     if (use_hcore_guess) { // hcore guess
       // solve H C = e S C
@@ -475,6 +475,8 @@ std::vector<size_t> map_shell_to_basis_function(const std::vector<libint2::Shell
   return result;
 }
 
+// computes Superposition-Of-Atomic-Densities guess for the molecular density matrix
+// basically assumes minimal basis and occupies subshell by smearing electrons evenly over the orbitals
 Matrix compute_soad(const std::vector<Atom>& atoms) {
 
   // compute number of atomic orbitals
