@@ -16,5 +16,9 @@ void dgemm_blocked(const double* a, const double* b, double* c, size_t n,
                    size_t nrepeats, size_t bsize);
 void dgemm_blas(const double* a, const double* b, double* c, size_t n,
                 size_t nrepeats);
+#ifdef HAVE_EIGEN
+void dgemm_eigen(const double* a, const double* b, double* c, size_t n,
+                 size_t nrepeats);
+#endif
 
 #endif // __s2i2_core_gemmkernel_h_DEFINED

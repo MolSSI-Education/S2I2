@@ -12,7 +12,9 @@
 
 void daxpy(double* y, double a, const double* x, size_t n, size_t nrepeats);
 void daxpy_blas(double* y, double a, const double* x, size_t n, size_t nrepeats);
-//void daxpy_eigen(double* y, double a, const double* x, size_t n, size_t nrepeats);
+#ifdef HAVE_EIGEN
+void daxpy_eigen(double* y, double a, const double* x, size_t n, size_t nrepeats);
+#endif
 
 #endif // __s2i2_core_axpykernel_h_DEFINED
 
