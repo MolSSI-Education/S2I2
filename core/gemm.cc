@@ -64,7 +64,9 @@ double profile_dgemm(size_t n,
   else if (kernel == "blas")
     dgemm_blas(a, b, c, n, nrepeats);
   else if (kernel.find("block") != std::string::npos) {
-    dgemm_blocked(a, b, c, n, nrepeats, 16);
+    std::stringstream ss; ss << std::string(kernel.begin()+5, kernel.end());
+    size_t blocksize; ss >> blocksize;
+    dgemm_blocked(a, b, c, n, nrepeats, blocksize);
   }
   else {
     std::cerr << "invalid kernel" << std::endl;
