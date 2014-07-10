@@ -1,6 +1,15 @@
 # S2I2
 
-Code and other materials for the S2I2 Software Institute Summer School
+Code and other materials for the S2I2 Software Institute Summer School. See the LICENSE file for what you can do with this code
+
+## Core performance examples
+
+See core directory
+
+axpy: measures performance of y[i] += a * x[i] vector operation
+
+gemm: measures performance of matrix multiplication
+
 
 ## Hartree-Fock examples
 
@@ -18,6 +27,10 @@ hf.v2: the integrals-on-disk C++ version using matrix package Eigen
   * sprinkles of C++11 to save typing ... any recent C++ compiler will do
 
 hf.v3: the integral-direct C++ version
-  * is based on v2, uses libint-2.1.0-beta as the integral engine
+  * heavily-modified version of v2
+  * needs Eigen AND Libint 2.1.0 beta; make sure to update Makefile
+  * requires C++11
 
 ### *parallel* HF
+
+
