@@ -5,7 +5,7 @@
 //
 
 // C interface to BLAS
-#include <cblas.h>
+#include <mkl_cblas.h>
 // Eigen library Core capabilities
 //#include <Eigen/Core>
 

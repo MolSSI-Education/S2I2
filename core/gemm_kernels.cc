@@ -5,7 +5,7 @@
 //
 
 #include <cassert>
-#include <cblas.h>
+#include <mkl_cblas.h>
 
 #include "gemm_kernels.h"
 

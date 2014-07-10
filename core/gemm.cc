@@ -10,6 +10,7 @@
 #include <iostream>
 #include <sstream>
 #include <cassert>
+#include <chrono>
 
 #include "gemm_kernels.h"
 
