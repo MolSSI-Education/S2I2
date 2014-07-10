@@ -5,9 +5,15 @@
 //
 
 // C interface to BLAS
-#include <mkl_cblas.h>
+#ifdef HAVE_MKL
+#  include <mkl_cblas.h>
+#else
+#  include <cblas.h>
+#endif
 // Eigen library Core capabilities
-//#include <Eigen/Core>
+#ifdef HAVE_EIGEN
+#  include <Eigen/Core>
+#endif
 
 #include "axpy_kernels.h"
 
@@ -30,7 +36,7 @@ void daxpy_blas(double* y, double a, const double* x, size_t n, size_t nrepeats)
   }
 }
 
-#if 0
+#ifdef HAVE_EIGEN
 void daxpy_eigen(double* y, double a, const double* x, size_t n, size_t nrepeats) {
   using namespace Eigen;
   Eigen::Map<const Eigen::VectorXd> xmap(x, n);

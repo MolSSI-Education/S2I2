@@ -5,7 +5,15 @@
 //
 
 #include <cassert>
-#include <mkl_cblas.h>
+#ifdef HAVE_MKL
+#  include <mkl_cblas.h>
+#else
+#  include <cblas.h>
+#endif
+// Eigen library Core capabilities
+#ifdef HAVE_EIGEN
+#  include <Eigen/Core>
+#endif
 
 #include "gemm_kernels.h"
 
@@ -91,3 +99,21 @@ void dgemm_blas(const double* a, const double* b, double* c, size_t n,
   }
 
 }
+
+#ifdef HAVE_EIGEN
+void dgemm_eigen(const double* a, const double* b, double* c, size_t n,
+                 size_t nrepeats) {
+
+  using namespace Eigen;
+  typedef Eigen::Matrix<double,
+                        Eigen::Dynamic,
+                        Eigen::Dynamic,
+                        Eigen::RowMajor> Matrix; // row-major dynamically-sized matrix of double
+  Eigen::Map<const Matrix> aa(a, n, n);
+  Eigen::Map<const Matrix> bb(b, n, n);
+  Eigen::Map<Matrix> cc(c, n, n);
+  for(size_t i = 0; i < nrepeats; ++i) {
+    cc = aa * bb;
+  }
+}
+#endif
