@@ -1,3 +1,7 @@
+CXX      = icpc
+CXXFLAGS = -mkl -std=c++11 -O3 -xHOST
+LDFLAGS  = -mkl
+
 default:: gemm axpy
 
 axpy:: axpy.o axpy_kernels.o
