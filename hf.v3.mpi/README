@@ -1,0 +1,19 @@
+Incremental transformation to derive the MPI version.
+
+We will parallelize in exactly the same way as the OpenMP version
+
+
+1) Introduce MPIInit and Finalize get rid of excess print and guard
+   all remaining print statements with if(rank==0)
+
+2) broadcast command line argument to all processes 
+
+   [here assume that everyone will have access to the file using the
+   same name ... not usually a valid assumption]
+
+
+Exercises
+
+ - repeat the parallelization starting from the sequential version
+
+  
