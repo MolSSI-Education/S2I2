@@ -20,12 +20,15 @@ int main(int argc, char* argv[]) {
   // validate command-line arguments
   if (argc != 4) {
     std::cout << "axpy -- benchmarks the AXPY (y[i] += a * x[i]) operation" << std::endl;
-    std::cout << "usage: axpy n nrepeats [kernel]" << std::endl;
+    std::cout << "usage: axpy n nrepeats kernel" << std::endl;
     std::cout << "       n        -- number of elements in vectors x and y" << std::endl;
     std::cout << "       nrepeats -- number of times to run the kernel" << std::endl;
     std::cout << "       kernel   -- kernel type, allowed values:" << std::endl;
     std::cout << "                   plain  = plain ole loop" << std::endl;
     std::cout << "                   blas   = call to BLAS library's daxpy function" << std::endl;
+#ifdef HAVE_EIGEN
+    std::cout << "                   eigen  = call to Eigen" << std::endl;
+#endif
     return 1;
   }
 
@@ -33,7 +36,7 @@ int main(int argc, char* argv[]) {
   size_t n; ss >> n;
   size_t nrepeats; ss >> nrepeats;
   std::string kernel; ss >> kernel;
-  assert(kernel == "plain" || kernel == "blas");
+  assert(kernel == "plain" || kernel == "blas" || kernel == "eigen");
 
   auto x = profile_daxpy(n, nrepeats, kernel);
 
@@ -56,11 +59,14 @@ double profile_daxpy(size_t n,
     daxpy(y, a, x, n, nrepeats);
   else if (kernel == "blas")
     daxpy_blas(y, a, x, n, nrepeats);
+#ifdef HAVE_EIGEN
+  else if (kernel == "eigen")
+    daxpy_eigen(y, a, x, n, nrepeats);
+#endif
   else {
     std::cerr << "invalid kernel" << std::endl;
     exit(1);
   }
-  //daxpy_eigen(y, a, x, n, nrepeats);
 
   const auto tstop = std::chrono::system_clock::now();
   const std::chrono::duration<double> time_elapsed = tstop - tstart;
