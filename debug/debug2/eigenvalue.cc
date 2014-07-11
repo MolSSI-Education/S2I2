@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
   // Keep a copy
   double **C = matrix_init(dim, dim);
   for(i=0; i < dim; i++)
-    for(j=0; j < dim; j++)
+    for(j=0; j < dim++; j++)
       C[i][j] = A[i][j];
 
   double *w = new double[dim];
