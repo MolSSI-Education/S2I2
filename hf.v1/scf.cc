@@ -28,6 +28,12 @@ void read_geometry(const char*, std::vector<Atom>&);
 double** read_1e_ints(const char* filename, int nao);
 double* read_2e_ints(const char* filename, int nao);
 
+void C_DGEMM(char transa, char transb, int m, int n, int k, double alpha,
+double* a, int lda, double* b, int ldb, double beta, double* c, int ldc);
+int C_DSYEV(char jobz, char uplo, int n, double *a, int lda, double *w,
+double *work, int lwork);
+void C_DAXPY(int n, double a, double *x, int incx, double *y, int incy);
+
 int main(int argc, char *argv[]) {
 
   try {
@@ -315,5 +321,34 @@ double* read_2e_ints(const char* filename, int nao) {
   is.close();
 
   return result;
+}
+
+extern "C" {
+extern void dgemm_(char*, char*, int*, int*, int*, double*, double*, int*,
+double*, int*, double*, double*, int*);
+extern void dsyev_(char*, char*, int*, double*, int*, double*, double*,
+int*, int*);
+extern void daxpy_(int*, double*, double*, int*, double*, int*);
+}
+
+void C_DGEMM(char transa, char transb, int m, int n, int k, double alpha,
+double* a, int lda, double* b, int ldb, double beta, double* c, int ldc)
+{
+    if(m == 0 || n == 0 || k == 0) return;
+    dgemm_(&transb, &transa, &n, &m, &k, &alpha, b, &ldb, a, &lda, &beta,
+c, &ldc);
+}
+
+int C_DSYEV(char jobz, char uplo, int n, double *a, int lda, double *w,
+double *work, int lwork){
+    int info;
+    dsyev_(&jobz, &uplo, &n, a, &lda, w, work, &lwork, &info);
+
+    return info;
+}
+
+void C_DAXPY(int n, double a, double *x, int incx, double *y, int incy)
+{
+   daxpy_(&n, &a, x, &incx, y, &incy);
 }
 
