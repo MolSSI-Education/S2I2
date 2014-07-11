@@ -15,7 +15,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
-#include <strings.h>
+#include <cstring>
 
 #include "diag.h"
 

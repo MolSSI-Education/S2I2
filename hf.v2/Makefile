@@ -1,4 +1,4 @@
-EIGENPATH = /opt/local/include/eigen3
+EIGENPATH = /gpfs/software/eigen-eigen-6b38706d90a9
 
 CXX = g++
 CXXFLAGS = -std=c++11 -g -Wall -Wno-deprecated-register
