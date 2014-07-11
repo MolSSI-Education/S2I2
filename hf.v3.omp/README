@@ -19,6 +19,8 @@ Exercises
 
   - repeat the above steps for yourself to be sure you understand
 
+  - what are the good and bad points of our approach?
+
   - see what happens if you use just one integral engine shared
     by all threads
 
@@ -28,8 +30,5 @@ Exercises
 
   - parallelize 2-electron part using nested parallel for loops
 
-  - use just 1 G matrix for all threads
-
-
-
-  
+  - use just 1 G matrix for all threads ... what should be in
+    the critical section for correct AND efficient execution?
