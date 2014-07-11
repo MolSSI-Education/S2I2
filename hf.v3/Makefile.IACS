@@ -14,4 +14,4 @@ default:: scf
 
 clean:
 	rm -f *.o scf *~
-
+ 
