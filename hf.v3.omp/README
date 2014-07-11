@@ -1,0 +1,11 @@
+Incremental transformation approach to getting OpenMP working
+
+1) What is the most expensive thing?  The direct two-electron Fock build
+
+2) So let's parallelize that.  But first add some timing measurement.
+
+   include omp.h, instrument code
+
+   let's also get rid of printing the matrices which will get big
+
+3) 
