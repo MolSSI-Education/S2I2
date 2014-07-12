@@ -39,12 +39,12 @@ Exercises
  - introduce Schwarz screening
 
 
-Benzene
- P   Fock  Total  Total-speedup
+Benzene (I think I forgot to turn on optimization so prolly with -O0 -g)
+ P   Fock  Total 
  1  130.64 131.18
  2   63.99  64.53
  4   32.35  32.89
  8   17.09  17.66
 12   12.04  12.65
 16    9.31   9.97
-32    
+

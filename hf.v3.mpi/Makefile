@@ -3,7 +3,7 @@ LIBINT2PATH = /gpfs/software/libint-2.1.0-beta-gcc-4.9.0x
 LIBINT2INCLUDES = -I$(LIBINT2PATH)/include -I$(LIBINT2PATH)/include/libint2
 
 CXX = mpicxx
-CXXFLAGS = -std=c++11 -O0 -g -march=native
+CXXFLAGS = -std=c++11 -O3 -g -march=native -ffast-math
 CPPFLAGS = -I$(EIGENPATH) $(LIBINT2INCLUDES)
 LDFLAGS = 
 
