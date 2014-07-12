@@ -1,0 +1,19 @@
+
+Illustrates how OpenMP directives can introduce bugs in this instance
+by asserting that iterations of a loop can run in parallel even when a
+dependency between iterations is very visible.
+
+Elements of an array [0..N-1] are initialized to i and then the partial sums 
+
+ sum(j=0..i) a[j]
+
+are computed by accumulating into the same array.  Finally, the last
+element is printed out which should have value N*(N-1)/2.
+
+The various files are the original sequential version, different
+parallel for loop schedules (static, dynamic, guided), and finally 
+an ordered parallel for.  
+
+
+
+

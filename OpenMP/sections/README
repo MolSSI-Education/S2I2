@@ -1,0 +1,14 @@
+Illustrates SECTIONS and BARRIERS
+
+sections.cc ... use of SECTION
+
+single_sec.cc ... reads a number from input and computes something with it
+
+single.cc ... does the same (and more!) in parallel
+
+Question: why are the barriers necessary?
+
+Question: is a flush necessary with a barrier?
+
+Question: when is a flush necessary?
+
