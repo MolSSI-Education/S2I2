@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <vector>
 #include <chrono>
+#include <cstring>
 
 // Eigen matrix algebra library
 #include <Eigen/Dense>
@@ -56,7 +57,8 @@ int main(int argc, char *argv[]) {
   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
   MPI_Comm_rank(MPI_COMM_WORLD, &me);
 
-
+  double fock_time = 0.0, total_time = MPI_Wtime();
+  double start;
 
   using std::cout;
   using std::cerr;
@@ -70,7 +72,15 @@ int main(int argc, char *argv[]) {
 
     // read geometry from a file; by default read from h2o.geom, else take filename (.xyz or .geom) from the command line
     const auto filename = (argc > 1) ? argv[1] : "h2o.geom";
-    std::vector<Atom> atoms = read_geometry(filename);
+
+    char buf[256];
+    if (std::strlen(filename)+1 > sizeof(buf)) throw "buf is too small";
+    if (me == 0) std::strcpy(buf,filename);
+    
+    if (MPI_Bcast(buf, sizeof(buf), MPI_BYTE, 0, MPI_COMM_WORLD) != MPI_SUCCESS) 
+      throw("broadcast failed");
+
+    std::vector<Atom> atoms = read_geometry(buf);
 
     // count the number of electrons
     auto nelectron = 0;
@@ -89,7 +99,7 @@ int main(int argc, char *argv[]) {
         auto r = sqrt(r2);
         enuc += atoms[i].atomic_number * atoms[j].atomic_number / r;
       }
-    cout << "\tNuclear repulsion energy = " << enuc << endl;
+    if (me == 0) cout << "\tNuclear repulsion energy = " << enuc << endl;
 
     /*** =========================== ***/
     /*** create basis set            ***/
@@ -179,8 +189,10 @@ int main(int argc, char *argv[]) {
 
       // build a new Fock matrix
       auto F = H;
+      start = MPI_Wtime();                     // <<< 
       //F += compute_2body_fock_simple(shells, D);
       F += compute_2body_fock(shells, D);
+      fock_time += MPI_Wtime() - start;        // <<<
 
       //if (iter == 1) {
       //cout << "\n\tFock Matrix:\n";
@@ -191,6 +203,10 @@ int main(int argc, char *argv[]) {
       Eigen::GeneralizedSelfAdjointEigenSolver<Matrix> gen_eig_solver(F, S);
       auto eps = gen_eig_solver.eigenvalues();
       auto C = gen_eig_solver.eigenvectors();
+
+      // Broadcast C to everyone 
+      if (MPI_Bcast(C.data(), nao*nao, MPI_DOUBLE, 0, MPI_COMM_WORLD) != MPI_SUCCESS) 
+	throw("broadcast of C failed");
 
       // compute density, D = C(occ) . C(occ)T
       auto C_occ = C.leftCols(ndocc);
@@ -209,10 +225,10 @@ int main(int argc, char *argv[]) {
       const auto tstop = std::chrono::system_clock::now();
       const std::chrono::duration<double> time_elapsed = tstop - tstart;
 
-      if (iter == 1)
+      if (iter == 1 && me == 0)
         std::cout <<
         "\n\n Iter        E(elec)              E(tot)               Delta(E)             RMS(D)         Time(s)\n";
-      printf(" %02d %20.12f %20.12f %20.12f %20.12f %10.5lf\n", iter, ehf, ehf + enuc,
+      if (me == 0) printf(" %02d %20.12f %20.12f %20.12f %20.12f %10.5lf\n", iter, ehf, ehf + enuc,
              ediff, rmsd, time_elapsed.count());
 
     } while (((fabs(ediff) > conv) || (fabs(rmsd) > conv)) && (iter < maxiter));
@@ -238,6 +254,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  total_time = MPI_Wtime() - total_time;
+  if (me == 0) printf("\n\nFock build time=%.2fs   total time=%.2fs   nproc=%d\n", fock_time, total_time, nproc);
+    
   MPI_Finalize();
   return 0;
 }
@@ -302,8 +321,9 @@ std::vector<Atom> read_dotxyz(std::istream& is) {
 }
 
 std::vector<Atom> read_geometry(const std::string& filename) {
-
-  std::cout << "Will read geometry from " << filename << std::endl;
+  int me;
+  MPI_Comm_rank(MPI_COMM_WORLD, &me);
+  if (me == 0) std::cout << "Will read geometry from " << filename << std::endl;
   std::ifstream is(filename);
   assert(is.good());
 
@@ -656,6 +676,11 @@ Matrix compute_2body_fock_simple(const std::vector<libint2::Shell>& shells,
 Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
                           const Matrix& D) {
 
+  int nproc, me;
+  MPI_Comm_size(MPI_COMM_WORLD, &nproc);
+  MPI_Comm_rank(MPI_COMM_WORLD, &me);
+  long count = 0;
+
   const auto n = nbasis(shells);
   Matrix G = Matrix::Zero(n,n);
 
@@ -709,54 +734,62 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
         const auto s4_max = (s1 == s3) ? s2 : s3;
         for(auto s4=0; s4<=s4_max; ++s4) {
 
-          auto bf4_first = shell2bf[s4];
-          auto n4 = shells[s4].size();
+	  if (me == (count%nproc)) {
 
-          // compute the permutational degeneracy (i.e. # of equivalents) of the given shell set
-          auto s12_deg = (s1 == s2) ? 1.0 : 2.0;
-          auto s34_deg = (s3 == s4) ? 1.0 : 2.0;
-          auto s12_34_deg = (s1 == s3) ? (s2 == s4 ? 1.0 : 2.0) : 2.0;
-          auto s1234_deg = s12_deg * s34_deg * s12_34_deg;
-
-          const auto* buf = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
-
-          // ANSWER
-          // 1) each shell set of integrals contributes up to 6 shell sets of the Fock matrix:
-          //    F(a,b) += (ab|cd) * D(c,d)
-          //    F(c,d) += (ab|cd) * D(a,b)
-          //    F(b,d) -= 1/4 * (ab|cd) * D(a,c)
-          //    F(b,c) -= 1/4 * (ab|cd) * D(a,d)
-          //    F(a,c) -= 1/4 * (ab|cd) * D(b,d)
-          //    F(a,d) -= 1/4 * (ab|cd) * D(b,c)
-          // 2) each permutationally-unique integral (shell set) must be scaled by its degeneracy,
-          //    i.e. the number of the integrals/sets equivalent to it
-          // 3) the end result must be symmetrized
-          for(auto f1=0, f1234=0; f1!=n1; ++f1) {
-            const auto bf1 = f1 + bf1_first;
-            for(auto f2=0; f2!=n2; ++f2) {
-              const auto bf2 = f2 + bf2_first;
-              for(auto f3=0; f3!=n3; ++f3) {
-                const auto bf3 = f3 + bf3_first;
-                for(auto f4=0; f4!=n4; ++f4, ++f1234) {
-                  const auto bf4 = f4 + bf4_first;
-                  const auto value = buf[f1234];
-                  const auto value_scal_by_deg = value * s1234_deg;
-
-                  G(bf1,bf2) += D(bf3,bf4) * value_scal_by_deg;
-                  G(bf3,bf4) += D(bf1,bf2) * value_scal_by_deg;
-                  G(bf1,bf3) -= 0.25 * D(bf2,bf4) * value_scal_by_deg;
-                  G(bf2,bf4) -= 0.25 * D(bf1,bf3) * value_scal_by_deg;
-                  G(bf1,bf4) -= 0.25 * D(bf2,bf3) * value_scal_by_deg;
-                  G(bf2,bf3) -= 0.25 * D(bf1,bf4) * value_scal_by_deg;
-                }
-              }
-            }
-          }
-
-        }
+	    auto bf4_first = shell2bf[s4];
+	    auto n4 = shells[s4].size();
+	    
+	    // compute the permutational degeneracy (i.e. # of equivalents) of the given shell set
+	    auto s12_deg = (s1 == s2) ? 1.0 : 2.0;
+	    auto s34_deg = (s3 == s4) ? 1.0 : 2.0;
+	    auto s12_34_deg = (s1 == s3) ? (s2 == s4 ? 1.0 : 2.0) : 2.0;
+	    auto s1234_deg = s12_deg * s34_deg * s12_34_deg;
+	    
+	    const auto* buf = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
+	    
+	    // ANSWER
+	    // 1) each shell set of integrals contributes up to 6 shell sets of the Fock matrix:
+	    //    F(a,b) += (ab|cd) * D(c,d)
+	    //    F(c,d) += (ab|cd) * D(a,b)
+	    //    F(b,d) -= 1/4 * (ab|cd) * D(a,c)
+	    //    F(b,c) -= 1/4 * (ab|cd) * D(a,d)
+	    //    F(a,c) -= 1/4 * (ab|cd) * D(b,d)
+	    //    F(a,d) -= 1/4 * (ab|cd) * D(b,c)
+	    // 2) each permutationally-unique integral (shell set) must be scaled by its degeneracy,
+	    //    i.e. the number of the integrals/sets equivalent to it
+	    // 3) the end result must be symmetrized
+	    for(auto f1=0, f1234=0; f1!=n1; ++f1) {
+	      const auto bf1 = f1 + bf1_first;
+	      for(auto f2=0; f2!=n2; ++f2) {
+		const auto bf2 = f2 + bf2_first;
+		for(auto f3=0; f3!=n3; ++f3) {
+		  const auto bf3 = f3 + bf3_first;
+		  for(auto f4=0; f4!=n4; ++f4, ++f1234) {
+		    const auto bf4 = f4 + bf4_first;
+		    const auto value = buf[f1234];
+		    const auto value_scal_by_deg = value * s1234_deg;
+		    
+		    G(bf1,bf2) += D(bf3,bf4) * value_scal_by_deg;
+		    G(bf3,bf4) += D(bf1,bf2) * value_scal_by_deg;
+		    G(bf1,bf3) -= 0.25 * D(bf2,bf4) * value_scal_by_deg;
+		    G(bf2,bf4) -= 0.25 * D(bf1,bf3) * value_scal_by_deg;
+		    G(bf1,bf4) -= 0.25 * D(bf2,bf3) * value_scal_by_deg;
+		    G(bf2,bf3) -= 0.25 * D(bf1,bf4) * value_scal_by_deg;
+		  }
+		}
+	      }
+	    }
+	    
+	  }
+	  count++;
+	}
       }
     }
   }
+
+  Matrix Tmp = Matrix::Zero(n,n);
+  MPI_Allreduce(G.data(), Tmp.data(), n*n, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+  G = Tmp;
 
   // symmetrize the result and return
   Matrix Gt = G.transpose();
