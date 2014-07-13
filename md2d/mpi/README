@@ -1,0 +1,32 @@
+Incremental transformation from sequential to parallel
+
+1) Insert MPI_Init and finalize, restrict printing to node zero only
+   ... but still running sequentially
+
+2) Mmm ... now need to think.  How are we going to parallelize this?
+
+   Let's replicate the particles since distributing them is much more
+   complicated (and more efficient!).
+
+   Since evaluation of the forces is driven by the neighborlist we can
+   have each node compute just a subset of the neighborlist and then 
+   do a global sum so that everyone has all of the forces.
+
+   What are the potential problems here?
+
+2a) Prolly need to broadcast the initial coords and velocities to ensure 
+    everyone starting from the same place
+   
+3) Restrict computation of the neighbor list to a subset of particles
+   per node and introduce a global sum into the forces
+
+   .. oh and don't forget to global sum the virial and pe also
+
+
+These times with all processes within a node
+times:  force=21.91s  neigh=21.09s  total=44.37s  nproc=1
+times:  force=11.18s  neigh=10.52s  total=22.43s  nproc=2
+times:  force= 5.83s  neigh= 5.38s  total=11.67s  nproc=4
+times:  force= 3.15s  neigh= 2.77s  total= 6.22s  nproc=8
+times:  force= 2.44s  neigh= 1.92s  total= 4.67s  nproc=12
+times:  force= 3.02s  neigh= 1.48s  total= 4.75s  nproc=16

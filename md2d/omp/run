@@ -1,0 +1,6 @@
+
+/bin/rm -f out
+
+for p in 1 2 4 6 8 10 12 14 16; do
+   OMP_NUM_THREADS=$p ./md >> out
+done

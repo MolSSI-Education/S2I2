@@ -1,0 +1,34 @@
+Incremental transformation approach to getting OpenMP working
+
+1) What is the most expensive thing?  The direct two-electron Fock build
+
+2) So let's parallelize that.  But first add some timing measurement.
+
+   include omp.h, instrument code
+
+   let's also get rid of printing the matrices which will get big
+
+3) parallelize entirety of fock build using counter-mod mechanism
+   
+   use multiple G arrays to avoid dependency
+
+   use unique engine per thread since integral code NOT thread safe
+
+
+Exercises
+
+  - repeat the above steps for yourself to be sure you understand
+
+  - what are the good and bad points of our approach?
+
+  - see what happens if you use just one integral engine shared
+    by all threads
+
+  - parallelize 1-electon parts of the code
+
+  - parallelize 2-electron part using a parallel outer for loop
+
+  - parallelize 2-electron part using nested parallel for loops
+
+  - use just 1 G matrix for all threads ... what should be in
+    the critical section for correct AND efficient execution?

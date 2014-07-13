@@ -1,0 +1,19 @@
+
+Hello world and related programs to illustrate effect and nesting of
+parallel and parallel_for.  Also use of some of the OpenMP API.
+
+Think about effects of the environment variables
+  OMP_NUM_THREADS (set from 1 to 32=default)
+  OMP_NESTED (set to FALSE=default or TRUE)
+
+hello ... parallel section printing thread id and #threads
+
+hello_for ... parallel for loop printing thread id and #threads
+
+num_thr ... prints out #threads in main line code
+
+num_thr_parallel ... prints out #threads in parallel section
+
+num_thr_nested ... prints out #threads in nested parallel section
+
+num_thr_nested2 ... prints out #threads in nested parallel sections

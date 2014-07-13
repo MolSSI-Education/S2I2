@@ -9,7 +9,7 @@ LDFLAGS = -L$(LIBINT2PATH)/lib -lint2
 
 default:: scf
 
-scf: scf.cc
+scf:
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) scf.cc -o scf $(LDFLAGS)
 
 clean:

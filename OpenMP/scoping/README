@@ -1,0 +1,18 @@
+Playing with scoping rules
+
+default ... parallel section with default scope (=shared)
+
+default-none ... parallel section with default scope set to none
+             ... compilation should FAIL
+
+private ... illustrates lack of global effect of setting private variables
+
+private2 ... illustrates that private variables are default (not) initialized
+
+firstprivate ... illlustrates how to copy shared state into a private variable
+
+private3 ... illustrates (again but now with a loop) that state of
+             private variables is not copied out
+
+lastprivate ... illustrates how to copy out the state of the last iteration
+
