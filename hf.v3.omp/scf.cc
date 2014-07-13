@@ -13,6 +13,8 @@
 #include <vector>
 #include <chrono>
 
+#include <omp.h>
+
 // Eigen matrix algebra library
 #include <Eigen/Dense>
 #include <Eigen/Eigenvalues>
@@ -48,6 +50,9 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
                                  const Matrix& D);
 
 int main(int argc, char *argv[]) {
+
+  double fock_time = 0.0;
+  double start;
 
   using std::cout;
   using std::cerr;
@@ -100,23 +105,23 @@ int main(int argc, char *argv[]) {
 
     // compute overlap integrals
     auto S = compute_1body_ints(shells, libint2::OneBodyEngine::overlap);
-    cout << "\n\tOverlap Integrals:\n";
-    cout << S << endl;
+    //cout << "\n\tOverlap Integrals:\n";
+    //cout << S << endl;
 
     // compute kinetic-energy integrals
     auto T = compute_1body_ints(shells, libint2::OneBodyEngine::kinetic);
-    cout << "\n\tKinetic-Energy Integrals:\n";
-    cout << T << endl;
+    //cout << "\n\tKinetic-Energy Integrals:\n";
+    //cout << T << endl;
 
     // compute nuclear-attraction integrals
     Matrix V = compute_1body_ints(shells, libint2::OneBodyEngine::nuclear, atoms);
-    cout << "\n\tNuclear Attraction Integrals:\n";
-    cout << V << endl;
+    //cout << "\n\tNuclear Attraction Integrals:\n";
+    //cout << V << endl;
 
     // Core Hamiltonian = T + V
     Matrix H = T + V;
-    cout << "\n\tCore Hamiltonian:\n";
-    cout << H << endl;
+    //cout << "\n\tCore Hamiltonian:\n";
+    //cout << H << endl;
 
     // T and V no longer needed, free up the memory
     T.resize(0,0);
@@ -147,8 +152,8 @@ int main(int argc, char *argv[]) {
       D = compute_soad(atoms);
     }
 
-    cout << "\n\tInitial Density Matrix:\n";
-    cout << D << endl;
+    //cout << "\n\tInitial Density Matrix:\n";
+    //cout << D << endl;
 
     /*** =========================== ***/
     /*** main iterative loop         ***/
@@ -170,13 +175,15 @@ int main(int argc, char *argv[]) {
 
       // build a new Fock matrix
       auto F = H;
+      start = omp_get_wtime();                     // <<< 
       //F += compute_2body_fock_simple(shells, D);
       F += compute_2body_fock(shells, D);
+      fock_time += omp_get_wtime() - start;        // <<<
 
-      if (iter == 1) {
-        cout << "\n\tFock Matrix:\n";
-        cout << F << endl;
-      }
+      //if (iter == 1) {
+      //cout << "\n\tFock Matrix:\n";
+      //cout << F << endl;
+      //}
 
       // solve F C = e S C
       Eigen::GeneralizedSelfAdjointEigenSolver<Matrix> gen_eig_solver(F, S);
@@ -228,6 +235,8 @@ int main(int argc, char *argv[]) {
     cerr << "caught unknown exception\n";
     return 1;
   }
+
+  printf("\n\nFock build time = %.2f\n", fock_time);
 
   return 0;
 }
@@ -647,12 +656,8 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
                           const Matrix& D) {
 
   const auto n = nbasis(shells);
-  Matrix G = Matrix::Zero(n,n);
+  Matrix Gtotal = Matrix::Zero(n,n);
 
-  // construct the 2-electron repulsion integrals engine
-  libint2::TwoBodyEngine<libint2::Coulomb> engine(max_nprim(shells), max_l(shells), 0);
-
-  auto shell2bf = map_shell_to_basis_function(shells);
 
   // The problem with the simple Fock builder is that permutational symmetries of the Fock,
   // density, and two-electron integrals are not taken into account to reduce the cost.
@@ -680,75 +685,94 @@ Matrix compute_2body_fock(const std::vector<libint2::Shell>& shells,
   // The real trick is figuring out to which matrix elements of the Fock matrix each permutationally-unique
   // (ab|cd) contributes. STOP READING and try to figure it out yourself. (to check your answer see below)
 
-  // loop over permutatinally-unique set of shells
-  for(auto s1=0; s1!=shells.size(); ++s1) {
 
-    auto bf1_first = shell2bf[s1]; // first basis function in this shell
-    auto n1 = shells[s1].size();   // number of basis functions in this shell
-
-    for(auto s2=0; s2<=s1; ++s2) {
-
-      auto bf2_first = shell2bf[s2];
-      auto n2 = shells[s2].size();
-
-      for(auto s3=0; s3<=s1; ++s3) {
-
-        auto bf3_first = shell2bf[s3];
-        auto n3 = shells[s3].size();
-
-        const auto s4_max = (s1 == s3) ? s2 : s3;
-        for(auto s4=0; s4<=s4_max; ++s4) {
-
-          auto bf4_first = shell2bf[s4];
-          auto n4 = shells[s4].size();
-
-          // compute the permutational degeneracy (i.e. # of equivalents) of the given shell set
-          auto s12_deg = (s1 == s2) ? 1.0 : 2.0;
-          auto s34_deg = (s3 == s4) ? 1.0 : 2.0;
-          auto s12_34_deg = (s1 == s3) ? (s2 == s4 ? 1.0 : 2.0) : 2.0;
-          auto s1234_deg = s12_deg * s34_deg * s12_34_deg;
-
-          const auto* buf = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
-
-          // ANSWER
-          // 1) each shell set of integrals contributes up to 6 shell sets of the Fock matrix:
-          //    F(a,b) += (ab|cd) * D(c,d)
-          //    F(c,d) += (ab|cd) * D(a,b)
-          //    F(b,d) -= 1/4 * (ab|cd) * D(a,c)
-          //    F(b,c) -= 1/4 * (ab|cd) * D(a,d)
-          //    F(a,c) -= 1/4 * (ab|cd) * D(b,d)
-          //    F(a,d) -= 1/4 * (ab|cd) * D(b,c)
-          // 2) each permutationally-unique integral (shell set) must be scaled by its degeneracy,
-          //    i.e. the number of the integrals/sets equivalent to it
-          // 3) the end result must be symmetrized
-          for(auto f1=0, f1234=0; f1!=n1; ++f1) {
-            const auto bf1 = f1 + bf1_first;
-            for(auto f2=0; f2!=n2; ++f2) {
-              const auto bf2 = f2 + bf2_first;
-              for(auto f3=0; f3!=n3; ++f3) {
-                const auto bf3 = f3 + bf3_first;
-                for(auto f4=0; f4!=n4; ++f4, ++f1234) {
-                  const auto bf4 = f4 + bf4_first;
-                  const auto value = buf[f1234];
-                  const auto value_scal_by_deg = value * s1234_deg;
-
-                  G(bf1,bf2) += D(bf3,bf4) * value_scal_by_deg;
-                  G(bf3,bf4) += D(bf1,bf2) * value_scal_by_deg;
-                  G(bf1,bf3) -= 0.25 * D(bf2,bf4) * value_scal_by_deg;
-                  G(bf2,bf4) -= 0.25 * D(bf1,bf3) * value_scal_by_deg;
-                  G(bf1,bf4) -= 0.25 * D(bf2,bf3) * value_scal_by_deg;
-                  G(bf2,bf3) -= 0.25 * D(bf1,bf4) * value_scal_by_deg;
-                }
-              }
-            }
-          }
-
-        }
+#pragma omp parallel default(none) shared(shells,D,Gtotal)
+  {
+    const int tid = omp_get_thread_num();
+    const int nthread = omp_get_num_threads();
+    long count = 0;
+    
+    libint2::TwoBodyEngine<libint2::Coulomb> engine(max_nprim(shells), max_l(shells), 0);
+    Matrix G = Matrix::Zero(n,n);
+    auto shell2bf = map_shell_to_basis_function(shells);
+    
+    
+    // loop over permutatinally-unique set of shells
+    for(auto s1=0; s1!=shells.size(); ++s1) {
+      
+      auto bf1_first = shell2bf[s1]; // first basis function in this shell
+      auto n1 = shells[s1].size();   // number of basis functions in this shell
+      
+      for(auto s2=0; s2<=s1; ++s2) {
+	
+	auto bf2_first = shell2bf[s2];
+	auto n2 = shells[s2].size();
+	
+	for(auto s3=0; s3<=s1; ++s3) {
+	  
+	  auto bf3_first = shell2bf[s3];
+	  auto n3 = shells[s3].size();
+	  
+	  const auto s4_max = (s1 == s3) ? s2 : s3;
+	  for(auto s4=0; s4<=s4_max; ++s4) {
+	    
+	    if (tid == (count%nthread)) {
+	      
+	      auto bf4_first = shell2bf[s4];
+	      auto n4 = shells[s4].size();
+	      
+	      // compute the permutational degeneracy (i.e. # of equivalents) of the given shell set
+	      auto s12_deg = (s1 == s2) ? 1.0 : 2.0;
+	      auto s34_deg = (s3 == s4) ? 1.0 : 2.0;
+	      auto s12_34_deg = (s1 == s3) ? (s2 == s4 ? 1.0 : 2.0) : 2.0;
+	      auto s1234_deg = s12_deg * s34_deg * s12_34_deg;
+	      
+	      const auto* buf = engine.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
+	      
+	      // ANSWER
+	      // 1) each shell set of integrals contributes up to 6 shell sets of the Fock matrix:
+	      //    F(a,b) += (ab|cd) * D(c,d)
+	      //    F(c,d) += (ab|cd) * D(a,b)
+	      //    F(b,d) -= 1/4 * (ab|cd) * D(a,c)
+	      //    F(b,c) -= 1/4 * (ab|cd) * D(a,d)
+	      //    F(a,c) -= 1/4 * (ab|cd) * D(b,d)
+	      //    F(a,d) -= 1/4 * (ab|cd) * D(b,c)
+	      // 2) each permutationally-unique integral (shell set) must be scaled by its degeneracy,
+	      //    i.e. the number of the integrals/sets equivalent to it
+	      // 3) the end result must be symmetrized
+	      for(auto f1=0, f1234=0; f1!=n1; ++f1) {
+		const auto bf1 = f1 + bf1_first;
+		for(auto f2=0; f2!=n2; ++f2) {
+		  const auto bf2 = f2 + bf2_first;
+		  for(auto f3=0; f3!=n3; ++f3) {
+		    const auto bf3 = f3 + bf3_first;
+		    for(auto f4=0; f4!=n4; ++f4, ++f1234) {
+		      const auto bf4 = f4 + bf4_first;
+		      const auto value = buf[f1234];
+		      const auto value_scal_by_deg = value * s1234_deg;
+		      
+		      G(bf1,bf2) += D(bf3,bf4) * value_scal_by_deg;
+		      G(bf3,bf4) += D(bf1,bf2) * value_scal_by_deg;
+		      G(bf1,bf3) -= 0.25 * D(bf2,bf4) * value_scal_by_deg;
+		      G(bf2,bf4) -= 0.25 * D(bf1,bf3) * value_scal_by_deg;
+		      G(bf1,bf4) -= 0.25 * D(bf2,bf3) * value_scal_by_deg;
+		      G(bf2,bf3) -= 0.25 * D(bf1,bf4) * value_scal_by_deg;
+		    }
+		  }
+		}
+	      }
+	    }
+	    count++; // <<<<<
+	  }
+	}
       }
     }
+#pragma omp critical
+    {
+      Gtotal += G;
+    }
   }
-
   // symmetrize the result and return
-  Matrix Gt = G.transpose();
-  return 0.5 * (G + Gt);
+  Matrix Gt = Gtotal.transpose();
+  return 0.5 * (Gtotal + Gt);
 }

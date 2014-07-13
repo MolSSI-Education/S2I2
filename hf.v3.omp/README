@@ -9,6 +9,8 @@ Incremental transformation approach to getting OpenMP working
    let's also get rid of printing the matrices which will get big
 
 3) parallelize entirety of fock build using counter-mod mechanism
+
+   why is count a long?  is there a better solution?
    
    use multiple G arrays to avoid dependency
 
