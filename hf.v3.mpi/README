@@ -39,12 +39,12 @@ Exercises
  - introduce Schwarz screening
 
 
-Benzene (I think I forgot to turn on optimization so prolly with -O0 -g)
- P   Fock  Total 
- 1  130.64 131.18
- 2   63.99  64.53
- 4   32.35  32.89
- 8   17.09  17.66
-12   12.04  12.65
-16    9.31   9.97
-
+Hexane
+ build time=1.51s   total time=1.80s   nproc=64
+ build time=2.66s   total time=2.94s   nproc=32
+ build time=4.92s   total time=5.20s   nproc=16
+ build time=6.22s   total time=6.48s   nproc=12
+ build time=8.88s   total time=9.10s   nproc=8
+ build time=16.98s   total time=17.19s   nproc=4
+ build time=33.48s   total time=33.68s   nproc=2
+ build time=66.70s   total time=66.90s   nproc=1
