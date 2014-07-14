@@ -10,6 +10,9 @@ hello ... parallel section printing thread id and #threads
 
 hello_for ... parallel for loop printing thread id and #threads
 
+setvec ... sequential simple for loop ... add 1 line to file to
+           parallelize the initialization loop
+
 num_thr ... prints out #threads in main line code
 
 num_thr_parallel ... prints out #threads in parallel section
@@ -17,3 +20,4 @@ num_thr_parallel ... prints out #threads in parallel section
 num_thr_nested ... prints out #threads in nested parallel section
 
 num_thr_nested2 ... prints out #threads in nested parallel sections
+
