@@ -1,7 +1,7 @@
 
 CXX = icpc
 CXXFLAGS = -openmp
-TARGETS = hello hello_for num_thr num_thr_parallel num_thr_nested num_thr_nested2
+TARGETS = hello hello_for num_thr num_thr_parallel num_thr_nested num_thr_nested2 setvec
 
 all:	$(TARGETS)
 

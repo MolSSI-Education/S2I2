@@ -2,7 +2,7 @@ Illustrates SECTIONS and BARRIERS
 
 sections.cc ... use of SECTION
 
-single_sec.cc ... reads a number from input and computes something with it
+single_seq.cc ... reads a number from input and computes something with it
 
 single.cc ... does the same (and more!) in parallel
 

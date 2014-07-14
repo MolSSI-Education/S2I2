@@ -1,3 +1,8 @@
+https://github.com/davestampf/OpenMPTutorialFull
+
+http://openmp.org/wp/openmp-specifications/
+  - see links to examples and reference card
+
 https://computing.llnl.gov/tutorials/openMP/
 
 http://openmp.org/mp-documents/omp-hands-on-SC08.pdf

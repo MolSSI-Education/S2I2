@@ -1,12 +1,14 @@
 
 
-0)  Read the Intel and GNU compiler documentation for OpenMP
+0)  Read the Intel and GNU compiler documentation for OpenMP,
+    the OpenMP specification, reference card, and examples.
 
 1)  Write from scratch hello world with various parallel constructs
     ... parallel, parallel setions, parallel for, nesting constructs
 
-2)  Employ different parallel strategies to parallelize the MxM code
-    ... try to get good parallel scaling ... and understand why
+2)  Employ different loop orders and parallel strategies to parallelize
+    the MxM code ... try to get good parallel scaling ... and
+    understand why
 
 3)  Parallelize one or more of the HF.V3, VMC, MD, MC_fortran codes
 
