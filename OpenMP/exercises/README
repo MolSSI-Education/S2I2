@@ -3,8 +3,19 @@
 0)  Read the Intel and GNU compiler documentation for OpenMP
 
 1)  Write from scratch hello world with various parallel constructs
-    ... parallel, parallel setions, parallel for, nesting
+    ... parallel, parallel setions, parallel for, nesting constructs
 
 2)  Employ different parallel strategies to parallelize the MxM code
+    ... try to get good parallel scaling ... and understand why
 
-3)  Parallelize one or more of the HF, VMC, MD codes
+3)  Parallelize one or more of the HF.V3, VMC, MD, MC_fortran codes
+
+4)  Take Ed's Daxpy benchmark and parallelize it ... explain the performance
+    you see as a function of vector length and number of threads.
+
+5)  What is false sharing?  Can U write a code with that problem?
+
+6) Time critical/atomic/reduction strategies for summation and explain
+   the observed behavior.
+
+7)  Work on some of your own code
