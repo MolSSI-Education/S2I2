@@ -1,0 +1,18 @@
+#!/bin/bash
+#
+# nodes - the number of computer nodes in the job
+# ppn   - the number of MPI processes per node (ppn!)
+# the total number of processes is nodes*ppn
+#
+#PBS -l nodes=1:ppn=1,walltime=00:05:00
+#PBS -N timemxm
+#PBS -q short
+
+cd $PBS_O_WORKDIR
+OMP_NUM_THREADS=1 ./mxm
+OMP_NUM_THREADS=2 ./mxm
+OMP_NUM_THREADS=4 ./mxm
+OMP_NUM_THREADS=8 ./mxm
+OMP_NUM_THREADS=12 ./mxm
+OMP_NUM_THREADS=16 ./mxm
+
