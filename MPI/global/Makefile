@@ -1,5 +1,5 @@
 CXX = mpiicpc
-TARGETS = trapezoid_seq global trapezoid_par
+TARGETS = trapezoid_seq global trapezoid_par recursive
 
 all:	$(TARGETS)
 
