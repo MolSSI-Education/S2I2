@@ -7,4 +7,4 @@ all:	$(TARGETS)
 
 .PHONY:
 clean:
-	/bin/rm -f $(TARGETS) *.o core* *~
+	/bin/rm -f $(TARGETS) *.o core* *~  BeingGenial.e* BeingGenial.o*
