@@ -1,0 +1,11 @@
+
+Exchanging data between two processes illustrates some of the
+subtleties inherent in message passing algorithms.
+
+Processes 0 and 1 each have a buffer and they want to exchange values.
+How to do this correctly?
+
+Try it for various sizes of maxlen ... 1, 2, 128, 1024, 1024*1024
+
+
+
