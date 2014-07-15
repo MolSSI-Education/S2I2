@@ -24,10 +24,18 @@ http://www.mcs.anl.gov/research/projects/mpi/usingmpi/examples/main.htm
 
 
 2) Write a program to benchmark the performance of reduce, all-reduce,
-broadcast as a function of both N and P.
+broadcast as a function of both N and P.  Use N=1,2,4,8,...,1024*1024
+doubles. And experiment with processes on the same node and on
+different nodes (this means setting #nodes and #ppn correctly in the
+PBS file).  How to verify you have set these correctly?
+
+3) Write a recursively adaptive quadrature program
+
+4) Write MPI versions of the example SCF, MC, or MD codes
 
 
-3) Write MPI versions of the example SCF, MC, or MD codes
+
+
 
 
 
