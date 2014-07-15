@@ -1,0 +1,33 @@
+1) MPI tutorials or reference material
+
+https://computing.llnl.gov/tutorials/mpi/
+
+https://software.intel.com/en-us/search/site/language/en?query=mpi
+
+https://github.com/meifeng/MPI
+
+http://www.mpich.org/
+
+http://www.mpich.org/static/docs/v3.1/www3/MPI_Wait.html
+
+http://mpitutorial.com/mpi-send-and-receive/
+
+http://users.cs.cf.ac.uk/David.W.Walker/mpitutorial/
+
+http://www.lam-mpi.org/tutorials/one-step/ezstart.php
+
+http://heather.cs.ucdavis.edu/~matloff/158/PLN/ParProcBook.pdf
+
+http://www.shodor.org/cserd/Resources/Tutorials/BasicMPI/
+
+http://www.mcs.anl.gov/research/projects/mpi/usingmpi/examples/main.htm
+
+
+2) Write a program to benchmark the performance of reduce, all-reduce,
+broadcast as a function of both N and P.
+
+
+3) Write MPI versions of the example SCF, MC, or MD codes
+
+
+
