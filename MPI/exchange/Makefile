@@ -1,5 +1,5 @@
 CXX = mpiicpc
-TARGETS = exchange
+TARGETS = exchange ring
 
 all:	$(TARGETS)
 

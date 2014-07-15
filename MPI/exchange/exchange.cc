@@ -6,7 +6,7 @@ using namespace std;
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
-    const int maxlen = 1;
+    const int maxlen = 1; // Vary this ... 1, 2, 128, 1024, 1024*1024
     int nproc, rank;
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
