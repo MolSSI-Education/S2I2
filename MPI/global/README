@@ -1,0 +1,13 @@
+
+global illustrates
+ ... reduce
+ ... all reduce
+ ... broadcast
+
+trapezoid_seq ... sequential version 
+
+trapezoid illustrates use of
+ ... broadcast
+ ... reduce
+ ... master/worker model ... distribtued logic
+
