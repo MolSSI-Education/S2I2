@@ -38,6 +38,8 @@ int main()
     pthread_t threads[NTHREAD];
     int ids[NTHREAD];
 
+    std::cout << "Please don't run on a shared computer with lots of threads\n";
+
     nfinished = 0;
     pthread_spin_init(&spinlock, PTHREAD_PROCESS_PRIVATE);
     pthread_spin_init(&spinlock2,PTHREAD_PROCESS_PRIVATE);
