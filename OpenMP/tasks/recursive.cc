@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
+#include <omp.h>
 
 double g(double x) {
   return exp(-x*x)*cos(3*x);
@@ -21,7 +22,8 @@ double I(const double a, const double b, double (*f)(double)) {
   return sum*L;
 }
 
-double Irecur(const double a, const double b, double (*f)(double), const double eps, int level=0) {
+double Irecur(const double a, const double b, double (*f)(double), 
+	      const double eps, int level=0) {
   const double middle = (a+b)*0.5;
   double total=I(a,b,f);
   double left = I(a,middle,f);
@@ -30,7 +32,8 @@ double Irecur(const double a, const double b, double (*f)(double), const double 
   double err=std::abs(total-test);
 
   for (int i=0; i<level; i++) printf("  ");
-  printf("[%6.3f,%6.3f] total=%.6e test=%.6e err=%.2e\n", a, b, total, test, err);
+  printf("[%6.3f,%6.3f] total=%.6e test=%.6e err=%.2e tid=%d\n", 
+	 a, b, total, test, err, omp_get_thread_num());
   if (level >= 20) return test; // 2^20 = 1M boxes
 
   if (err<eps) 
