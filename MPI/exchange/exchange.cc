@@ -6,7 +6,7 @@ using namespace std;
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
-    const int maxlen = 1; // Vary this ... 1, 2, 128, 1024, 1024*1024
+    const int maxlen = 1024*1024; // Vary this ... 1, 2, 128, 1024, 1024*1024
     int nproc, rank;
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -17,10 +17,10 @@ int main(int argc, char** argv) {
     char* buf1 = new char[maxlen];
     char* buf2 = new char[maxlen];
 
-    if (rank == 0) printf("trying 1\n");
-    MPI_Send(buf1, maxlen, MPI::BYTE, other, 1, MPI_COMM_WORLD);
-    MPI_Recv(buf2, maxlen, MPI::BYTE, other, 1, MPI_COMM_WORLD, 
-    	     MPI_STATUS_IGNORE);
+     if (rank == 0) printf("trying 1\n");
+     MPI_Send(buf1, maxlen, MPI::BYTE, other, 1, MPI_COMM_WORLD);
+     MPI_Recv(buf2, maxlen, MPI::BYTE, other, 1, MPI_COMM_WORLD, 
+     	     MPI_STATUS_IGNORE);
 
     if (rank == 0) printf("trying 2\n");
     if (rank == 0) {
@@ -38,6 +38,11 @@ int main(int argc, char** argv) {
     MPI_Request req;
     MPI_Irecv(buf2, maxlen, MPI::BYTE, other, 3, MPI_COMM_WORLD, &req);
     MPI_Send(buf1, maxlen, MPI::BYTE, other, 3, MPI_COMM_WORLD);
+    MPI_Wait(&req, MPI_STATUS_IGNORE);
+
+    if (rank == 0) printf("trying 3a\n");
+    MPI_Isend(buf1, maxlen, MPI::BYTE, other, 3, MPI_COMM_WORLD, &req);
+    MPI_Recv(buf2, maxlen, MPI::BYTE, other, 3, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     MPI_Wait(&req, MPI_STATUS_IGNORE);
 
     if (rank == 0) printf("trying 4\n");
