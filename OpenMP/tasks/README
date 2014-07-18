@@ -1,0 +1,11 @@
+Illustrates use of OpenMP tasks to parallelize computations not easy to do with other construts
+
+tasks.cc ... computation on a tree ... builds a binary tree then
+performs a postorder traversal accumulating a sum up the tree.  
+
+recursive_seq.cc ... adatptive numerical quadrature ... sequential
+version
+
+recursive.cc ... adatptive numerical quadrature ... OpenMP task
+version
+
