@@ -1,4 +1,4 @@
-NVCC = nvcc
+NVCC = nvcc -arch=sm_20
 CXX = g++
 TARGETS = exptest exptest_nvidia
 
@@ -6,7 +6,10 @@ all:	$(TARGETS)
 
 
 exptest_nvidia:	exptest.cu
-	nvcc -o $@ $^
+	$(NVCC) -o $@ $^
+
+print:	print.cu
+	$(NVCC) -o $@ $^
 
 .PHONY:
 clean:
