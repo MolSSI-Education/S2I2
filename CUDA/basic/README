@@ -1,0 +1,96 @@
+
+Some basic use of NVIDIA GPGPU via CUDA. 
+
+exptest.cc ... host program for measuring speed of computing exponentials
+
+exptest.cu ... CUDA program for measuring speed of computing
+exponentials.  Key elements are use of cudaMalloc/cudaFree for
+on-device memory management, copying of data to/from the device,
+invocation of the kernel, and mapping of the for loop iteration space
+via the block/thread indices.  Note also the essential use of
+cudaDeviceSynchronize for measuring times.
+
+print.cu ... printing from the kernel ... U need to have -arch=sm_20
+argument on nvcc for this to work
+
+sum.cu ... I got carried away on this one.  Key points are 
+
+   - floating point arithmetic on the device is just as accurate as on
+     the host
+
+   - some library math functions (e.g., sin, exp) may not be quite as
+     accurate as on the host but the error is just in the last couple
+     of bits
+
+   - U can get accurate results from single precision computations
+     but U have to think!
+
+   - So why do results often differ so much between the host and
+     the GPGPU?  
+
+     *  Basically because of the order of operations.  On the host
+        it is natural to process data sequentially with just on
+        summand whereas on the GPGPU we will have nthread summands
+        and block/tree traversal of the data.
+
+   - The example computes sums using
+
+     *  On the GPGPU
+        Data    Accumualator
+        ----    ------------
+        Float     Float
+        Double    Float
+        Float     Double
+        Double    Double
+        Float     Kahan
+        Double    Kahan
+        Double    Double-Double
+
+     *  On the CPU in both forward and reverse order
+        Data    Accumualator
+        ----    ------------
+        Float   Float
+        Double  Double
+        Float   Kahan
+        Double  Kahan
+        Double  Double-Double
+
+  Kahan is the compensated summation algorithm attributed to Kahan.
+  DD or Double-Double uses the extended precision representation of Bailey.
+
+The results of the sum program are below. Notable items are
+
+   - worst error is on the host doing forward order summation ... can
+     U explain why?  Also explain why the reverse order sum is always
+     accuate.
+
+   - use of double precision is no guarantee of accuracy.  forward summation
+     in double on the host loses over 3 sig. fig.
+
+   - Kahan and DD both give errors that are largely independent
+     of the order of summation (though DD is expected to be more
+     accurate when there is a lot of cancellation).
+
+
+ DatType  AccType          Result            Error
+ -------  -------   ---------------------   -------
+     f        f     6.9314110279083252e-01  6.1e-06
+     d        f     6.9314110279083252e-01  6.1e-06
+     f        d     6.9314718246459961e-01  6.7e-09
+     d        d     6.9314717579157326e-01  4.4e-16
+     f   KahanF     6.9314712285995483e-01  5.3e-08
+     d   KahanD     6.9314717579157348e-01  2.2e-16
+     d       DD     6.9314717579157370e-01  0.0e+00
+Host float          6.9313752651214600e-01  9.6e-06
+Host double         6.9314717579207819e-01  5.0e-13
+Host Kahan<float>   6.9314718246459961e-01  6.7e-09
+Host Kahan<double>  6.9314717579157370e-01  0.0e+00
+Host DD             6.9314717579157370e-01  0.0e+00
+reversed order
+Host float          6.9314718246459961e-01  6.7e-09
+Host double         6.9314717579157370e-01  0.0e+00
+Host Kahan<float>   6.9314718246459961e-01  6.7e-09
+Host Kahan<double>  6.9314717579157370e-01  0.0e+00
+Host DD             6.9314717579157370e-01  0.0e+00
+
+     

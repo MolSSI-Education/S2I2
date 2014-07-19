@@ -207,24 +207,28 @@ int main() {
   const int n = 1024*1024*100;
   const double exact = 0.69314717579157375012334966576;
 
+  float fsum=0.0;
   double dsum=0.0;
   KahanAccumulator<double> kdsum(0.0);
   KahanAccumulator<float> kfsum(0.0);
   DD ddsum(0.0);
   for (int i=0; i<n; i++) {
     double t = f(i);
+    fsum += float(t);
     dsum += t;
     kdsum+=t;
     kfsum+=float(t);
     ddsum += t;
   }
 
+  float rfsum=0.0;
   double rdsum=0.0;
   KahanAccumulator<double> rkdsum(0.0);
   KahanAccumulator<float> rkfsum(0.0);
   DD rddsum(0.0);
   for (int i=n-1; i>=0; i--) {
     double t = f(i);
+    rfsum += float(t);
     rdsum += t;
     rkdsum+=t;
     rkfsum+=float(t);
@@ -241,15 +245,17 @@ int main() {
   test<KahanAccumulator<double>,double>(n,exact);
   test<DD,double>(n,exact);
 
+  printf("Host float          %.16e  %.1e\n", fsum, fabs(fsum-exact));
   printf("Host double         %.16e  %.1e\n", dsum, fabs(dsum-exact));
   printf("Host Kahan<float>   %.16e  %.1e\n", double(kfsum), fabs(double(kfsum)-exact));
   printf("Host Kahan<double>  %.16e  %.1e\n", double(kdsum), fabs(double(kdsum)-exact));
-  printf("Host DD st          %.16e  %.1e\n", double(ddsum), fabs(double(ddsum)-exact));
+  printf("Host DD             %.16e  %.1e\n", double(ddsum), fabs(double(ddsum)-exact));
   printf("reversed order\n");
+  printf("Host float          %.16e  %.1e\n", rfsum, fabs(rfsum-exact));
   printf("Host double         %.16e  %.1e\n", rdsum, fabs(rdsum-exact));
   printf("Host Kahan<float>   %.16e  %.1e\n", double(rkfsum), fabs(double(rkfsum)-exact));
   printf("Host Kahan<double>  %.16e  %.1e\n", double(rkdsum), fabs(double(rkdsum)-exact));
-  printf("Host DD st          %.16e  %.1e\n", double(rddsum), fabs(double(rddsum)-exact));
+  printf("Host DD             %.16e  %.1e\n", double(rddsum), fabs(double(rddsum)-exact));
 
   return 0;
 }
