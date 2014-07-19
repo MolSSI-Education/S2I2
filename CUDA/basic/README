@@ -20,12 +20,12 @@ sum.cu ... I got carried away on this one.  Key points are
 
    - some library math functions (e.g., sin, exp) may not be quite as
      accurate as on the host but the error is just in the last couple
-     of bits
+     of bits unless you switch on fast/reduced precision algorithms.
 
    - U can get accurate results from single precision computations
      but U have to think!
 
-   - So why do results often differ so much between the host and
+   - so why do results often differ so much between the host and
      the GPGPU?  
 
      *  Basically because of the order of operations.  On the host
@@ -60,9 +60,9 @@ sum.cu ... I got carried away on this one.  Key points are
 
 The results of the sum program are below. Notable items are
 
-   - worst error is on the host doing forward order summation ... can
+   - worst error is on the *host* doing forward order summation ... can
      U explain why?  Also explain why the reverse order sum is always
-     accuate.
+     accurate.
 
    - use of double precision is no guarantee of accuracy.  forward summation
      in double on the host loses over 3 sig. fig.
