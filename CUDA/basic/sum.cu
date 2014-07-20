@@ -100,23 +100,17 @@ public:
 };
 
 
-// Minimal double-double accumuator snarfed from Bailey's full double-double implementation
+// Minimal double-double accumuator motivated by Bailey's full double-double implementation
 class DD {
-  double x[2];
+  double hi;
+  double lo;
 
   __device__ __host__
-  inline double quick_two_sum(double a, double b, double &err) {
-    double s = a + b;
-    err = b - (s - a);
-    return s;
-  }
-    
-  __device__ __host__
-  inline double two_sum(double a, double b, double &err) {
-    double s = a + b;
-    double bb = s - a;
-    err = (a - (s - bb)) + (b - bb);
-    return s;
+  double addin(double y, double z, double &error) {
+    double x = y + z;
+    double r = x - y;
+    error = (y - (x - r)) + (z - r);
+    return x;
   }
         
 public:
@@ -125,44 +119,44 @@ public:
   DD() {} // Default constructor must be empty for use in Nvidia shared memory
 
   __device__ __host__
-  DD(double v) {x[0]=v; x[1]=0;}
+  DD(double v) : hi(v), lo(0) {}
 
   __device__ __host__
-  DD& operator=(const double a) {
-    x[0] = a;
-    x[1] = 0;
+  DD& operator=(const double x) {
+    hi = x;
+    lo = 0;
     return *this;
   }
         
   __device__ __host__
   DD& operator=(const DD& a) {
-    x[0] = a.x[0];
-    x[1] = a.x[1];
+    hi = a.hi;
+    lo = a.lo;
     return *this;
   }
         
   __device__ __host__
-  DD& operator+=(const DD &a) {
-    double s, e;
-    s = two_sum(x[0], a.x[0], e);
-    e += x[1];
-    e += a.x[1];
-    x[0] = quick_two_sum(s, e, x[1]);
+  DD& operator+=(const DD &other) {
+    double tmp, err;
+    tmp = addin(hi, other.hi, err);
+    err += lo;
+    err += other.lo;
+    hi = addin(tmp, err, lo);
     return *this;
   }        
 
   __device__ __host__
-  DD& operator+=(const double a) {
-    double s, e;
-    s = two_sum(x[0], a, e);
-    e += x[1];
-    x[0] = quick_two_sum(s, e, x[1]);
+  DD& operator+=(const double other) {
+    double tmp, err;
+    tmp = addin(hi, other, err);
+    err += lo;
+    hi = addin(tmp, err, lo);
     return *this;
   }        
 
   __device__ __host__
   operator double() const {
-    return x[0];
+    return hi;
   }
 };
 
