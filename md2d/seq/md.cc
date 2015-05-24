@@ -9,32 +9,34 @@
 
 // Global data
 
-const int natom = 8000;
+const int natom = 8000;         // Number of atoms
 const double sigma = 20;	// Particle radius
 const double L = 1600;		// Box size
 const double epsilon = 1.0;	// Binding energy
-const double target_temp = 0.4;
+const double target_temp = 0.4; // Target temperature
 const int nprint = 100;		// Print & temp scale every 100 steps
 const int nneigh = 20;		// Recompute neighbor list every 20 steps
 const int nstep=1000;		// Number of steps to take
 
-const double r2cut_neigh = 35;
-const double r2cut_force = 30;
-const double excess_vel = 1.6;
+const double r2cut_neigh = 35;  // Cut off for r-squared when computing neighbor list
+const double r2cut_force = 30;  // Cut off for r-squared when computing forces
+const double excess_vel = 1.6;  // Initialize with hot atoms
 
-double time_force, time_neigh, time_total;
+double time_force, time_neigh, time_total; // Timers
 
 typedef std::pair<int,int> pairT;
 typedef std::pair<double,double> xyT;
 typedef std::list<pairT> neighT;
 typedef std::vector<xyT> coordT;
 
+// Enforce periodic boundary conditions
 inline double periodic(double x, double L) {
     while (x>L) x-=L;
     while (x<0) x+=L;
     return x;
 }
 
+// Make the list of interacting atoms 
 neighT neighbor_list(const coordT& coords) {
     double start = omp_get_wtime();
     neighT neigh;
@@ -56,7 +58,6 @@ neighT neighbor_list(const coordT& coords) {
             double r2 = (dx*dx+dy*dy)/(sigma*sigma);
             if (r2 < r2cut_neigh) {
                 neigh.push_back(pairT(i,j));
-                //std::cout << "neigh "  << i << " " << j << std::endl;
             }
         }
     }
@@ -64,13 +65,14 @@ neighT neighbor_list(const coordT& coords) {
     return neigh;
 }
 
+// Compute the forces, virial and potential energy
 coordT forces(const neighT& neigh, const coordT& coords, double& virial, double& pe) {
     double start = omp_get_wtime();
     coordT f(natom,xyT(0.0,0.0));
 
     virial = pe = 0.0;
 
-    // V(ri-rj) = epsilon*((sigma/r)^12 - 2*(sigma/r)^6)
+    // V(|ri-rj|) = epsilon*((sigma/r)^12 - 2*(sigma/r)^6)
     // dV/dxi = -12*epsilon*((sigma/r)^14 - (sigma/r)^8)*(xi-xj)/sigma**2
     // F[i][x] = -dV/dxi
 
@@ -87,9 +89,6 @@ coordT forces(const neighT& neigh, const coordT& coords, double& virial, double&
         
         double dx = (xi-xj);
         double dy = (yi-yj);
-
-        if (dx == 0.0) throw "fjdlksjflk";
-        if (dy == 0.0) throw "fjdlksjflk";
 
         if (dx > (L/2)) dx = dx - L;
         else if (dx < (-L/2)) dx = dx + L;
@@ -120,12 +119,14 @@ coordT forces(const neighT& neigh, const coordT& coords, double& virial, double&
     return f;
 }
 
+// Constrain a to be in [-b,b]
 inline double restrict(double a, double b) {
     if (a > b) return b;
     else if (a < -b) return -b;
     else return a;
 }
 
+// Relax the initial random guess of atoms positions using steepest descent
 void optimize(coordT& coords) {
     double dt = 0.1;
     neighT neigh;
@@ -151,6 +152,7 @@ void optimize(coordT& coords) {
     }
 }
 
+// A simple pseudo-random number generator
 double drand() {
     static const unsigned int a = 1664525;
     static const unsigned int c = 1013904223;
@@ -163,6 +165,7 @@ double drand() {
 }
 
 
+// The main molecular dynamics program
 void md() {
     const double dt=0.03;
     std::cout << "Time step " << dt << std::endl;
@@ -189,7 +192,6 @@ void md() {
             }
             if (r2min > 0.125*sigma*sigma) break;
         }
-        //std::cout << xi << " " << yi << std::endl;
         coords[i]=xyT(xi,yi);
         double vx = (drand()-0.5)*std::sqrt(2.0*target_temp)*2.0*excess_vel;
         double vy = (drand()-0.5)*std::sqrt(2.0*target_temp)*2.0*excess_vel;
@@ -201,11 +203,13 @@ void md() {
     vxmean /= natom;
     vymean /= natom;
     
+    // Adjust so the mean velocity is zero
     for (int i=0; i<natom; i++) {
         v[i].first -= vxmean;
         v[i].second -= vymean;
     }
 
+    // Relax the initial random guess
     optimize(coords);
 
     // make the initial forces
@@ -216,10 +220,11 @@ void md() {
     double potential_energy;
     coordT f = forces(neigh,coords,virial,potential_energy);
 
+    // Finally!  Do the molecular dynamics
     int step_stats = 0;
     for (int step=1; step<=nstep; step++) {
-        // update the velocities to time t+dt/2
-        // and the positions to time t+dt
+
+        // update the velocities to time t+dt/2, and the positions to time t+dt
         for (int i=0; i<natom; i++) {
             double vx = v[i].first, vy = v[i].second;
             double Fx = f[i].first, Fy = f[i].second;
@@ -256,7 +261,7 @@ void md() {
 
         if ((step%nprint) == 0) {
 
-            if (step == 1) {
+            if (step == nprint) {
                 printf("\n");
                 printf("    time         ke            pe             e            T          P\n");
                 printf("  -------    -----------   ------------  ------------    ------    ------\n");
@@ -267,6 +272,7 @@ void md() {
             double pressure = (natom*temp + virial)/(L*L);
             double energy = kinetic_energy + potential_energy;
 
+            // Temperature scaling for the first (nstep/3) steps ... indicated with a * on printing
             double vscale = std::sqrt(target_temp/temp);
             if (step>=(nstep/3)) vscale=1.0;
             const char scaling[2]={' ','*'};

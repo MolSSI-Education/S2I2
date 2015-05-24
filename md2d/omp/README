@@ -31,7 +31,7 @@ space for another element to be pushed onto the back?  c) How is an
 STL list indexed/traversed?]
 
 
-1) Let's have a neightbor list per thread.  Hopefully this improves
+1) Let's have a neighbor list per thread.  Hopefully this improves
    cache locality, and using a vector should reduce memory allocation
    and traversal overheads.
 

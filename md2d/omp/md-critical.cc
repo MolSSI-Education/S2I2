@@ -249,8 +249,7 @@ void md() {
 
     int step_stats = 0;
     for (int step=1; step<=nstep; step++) {
-        // update the velocities to time t+dt/2
-        // and the positions to time t+dt
+        // update the velocities to time t+dt/2 and the positions to time t+dt
         for (int i=0; i<natom; i++) {
             double vx = v[i].first, vy = v[i].second;
             double Fx = f[i].first, Fy = f[i].second;
@@ -287,7 +286,7 @@ void md() {
 
         if ((step%nprint) == 0) {
 
-            if (step == 1) {
+            if (step == nprint) {
                 printf("\n");
                 printf("    time         ke            pe             e            T          P\n");
                 printf("  -------    -----------   ------------  ------------    ------    ------\n");
