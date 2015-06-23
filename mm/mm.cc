@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
 
   printf("Matrix dimension is %d.\n", dim);
 
-  // See random-number generator
+  // Seed random-number generator
   srand(time(0));
 
   // Allocate and fill matrices
@@ -40,14 +40,14 @@ int main(int argc, char *argv[])
 
   uint64_t begin = time_musec();
 
-//  for(int i=0; i < dim; i++)
-//    for(int j=0; j < dim; j++) {
-//      C[i][j] = 0.0;
-//      for(int k=0; k < dim; k++)
-//        C[i][j] += A[i][k] * B[j][k];
-//    }
+  for(int i=0; i < dim; i++)
+    for(int j=0; j < dim; j++) {
+      C[i][j] = 0.0;
+      for(int k=0; k < dim; k++)
+        C[i][j] += A[i][k] * B[j][k];
+    }
 
-  C_DGEMM('n','t', dim, dim, dim, 1.0, A[0], dim, B[0], dim, 0.0, C[0], dim);
+//  C_DGEMM('n','t', dim, dim, dim, 1.0, A[0], dim, B[0], dim, 0.0, C[0], dim);
 
   uint64_t end = time_musec();
   printf("Time for MM = %5.2f sec.\n", (double) (end-begin)/1000000.0);
@@ -103,6 +103,7 @@ uint64_t time_musec()
  return ret;
 }
 
+/*
 extern "C" {
 extern void dgemm_(char*, char*, int*, int*, int*, double*, double*, int*,
 double*, int*, double*, double*, int*);
@@ -114,4 +115,4 @@ double* a, int lda, double* b, int ldb, double beta, double* c, int ldc)
     if(m == 0 || n == 0 || k == 0) return;
     dgemm_(&transb, &transa, &n, &m, &k, &alpha, b, &ldb, a, &lda, &beta, c, &ldc);
 }
-
+*/
