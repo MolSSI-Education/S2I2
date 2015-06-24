@@ -1,6 +1,6 @@
 #include <iostream>
 #include <omp.h>
-
+ 
 int main(int argc, const char** argv) {
 
 #pragma omp parallel 
