@@ -14,12 +14,9 @@
 
 #include<stdio.h>
 #include<stdlib.h>
-#include<math.h>
 #include<string.h>
-#include<time.h>
 
 #include<cuda.h>
-#include<cublas.h>
 #include<cuda_runtime.h>
 
 #include<omp.h>
@@ -27,257 +24,8 @@
 #define NUM_THREADS  128
 #define MAX_BLOCKS 65535
 
-struct junk{
-    double x;
-    float padding;
-};
-
-// evaluate forces on GPU, use shared memory, avoids bank conflicts?
-__global__ void ForcesSharedMemory2(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6, unsigned long long *time) {
-
-    __shared__ junk xj[NUM_THREADS];
-    __shared__ junk yj[NUM_THREADS];
-    __shared__ junk zj[NUM_THREADS];
-
-    unsigned long long start = clock();
-
-    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
-    int i       = blockid*blockDim.x + threadIdx.x;
-
-    junk xi;
-    junk yi;
-    junk zi;
-    if ( i < n ) {
-        xi.x = x[i];
-        yi.x = y[i];
-        zi.x = z[i];
-    }
-
-    double fxi = 0.0;
-    double fyi = 0.0;
-    double fzi = 0.0;
-
-    int j = 0;
-    while( j + blockDim.x <= n ) {
-
-        // load xj, yj, zj into shared memory
-        xj[threadIdx.x].x = x[j + threadIdx.x];
-        yj[threadIdx.x].x = y[j + threadIdx.x];
-        zj[threadIdx.x].x = z[j + threadIdx.x];
-
-        // synchronize threads
-        __syncthreads();
-
-        for (int myj = 0; myj < blockDim.x; myj++) {
-
-            double dx  = xi.x - xj[myj].x;
-            double dy  = yi.x - yj[myj].x;
-            double dz  = zi.x - zj[myj].x;
-
-            double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
-            double r6  = r2*r2*r2;
-            double r8  = r6*r2;
-            double r14 = r6*r6*r2;
-            double f   = A12 / r14 - B6 / r8;
-
-            // THIS is the slow step! 
-            fxi += dx * f;
-            fyi += dy * f;
-            fzi += dz * f;
-
-        }
-
-        // synchronize threads
-        __syncthreads();
-
-        j += blockDim.x;
-    }
-
-    int leftover = n - (n / blockDim.x) * blockDim.x;
-
-    // synchronize threads
-    __syncthreads();
-
-    // last bit
-    if ( threadIdx.x < leftover ) {
-        // load rj into shared memory
-        xj[threadIdx.x].x = x[j + threadIdx.x];
-        yj[threadIdx.x].x = y[j + threadIdx.x];
-        zj[threadIdx.x].x = z[j + threadIdx.x];
-    }
-
-    // synchronize threads
-    __syncthreads();
-
-    for (int myj = 0; myj < leftover; myj++) {
-
-        double dx  = xi.x - xj[myj].x;
-        double dy  = yi.x - yj[myj].x;
-        double dz  = zi.x - zj[myj].x;
-
-        double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
-        double r6  = r2*r2*r2;
-        double r8  = r6*r2;
-        double r14 = r6*r6*r2;
-        double f   = A12 / r14 - B6 / r8;
-
-        // THIS is the slow step! 
-        fxi += dx * f;
-        fyi += dy * f;
-        fzi += dz * f;
-
-    }
-
-    if ( i < n ) {
-        fx[i] = fxi;
-        fy[i] = fyi;
-        fz[i] = fzi;
-    }
-
-    unsigned long long end = clock();
-
-    *time = (end - start);
-}
-
-// evaluate forces on GPU, use shared memory
-__global__ void ForcesSharedMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6) {
-
-    __shared__ double xj[NUM_THREADS];
-    __shared__ double yj[NUM_THREADS];
-    __shared__ double zj[NUM_THREADS];
-
-    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
-    int i       = blockid*blockDim.x + threadIdx.x;
-
-    double xi = 0.0;
-    double yi = 0.0;
-    double zi = 0.0;
-    if ( i < n ) {
-        xi = x[i];
-        yi = y[i];
-        zi = z[i];
-    }
-
-    double fxi = 0.0;
-    double fyi = 0.0;
-    double fzi = 0.0;
-
-    int j = 0;
-    while( j + blockDim.x <= n ) {
-
-        // load xj, yj, zj into shared memory
-        xj[threadIdx.x] = x[j + threadIdx.x];
-        yj[threadIdx.x] = y[j + threadIdx.x];
-        zj[threadIdx.x] = z[j + threadIdx.x];
-
-        // synchronize threads
-        __syncthreads();
-
-        for (int myj = 0; myj < blockDim.x; myj++) {
-
-            double dx  = xi - xj[myj];
-            double dy  = yi - yj[myj];
-            double dz  = zi - zj[myj];
-
-            double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
-            double r6  = r2*r2*r2;
-            double r8  = r6*r2;
-            double r14 = r6*r6*r2;
-            double f   = A12 / r14 - B6 / r8;
-
-            // slowest step
-            fxi += dx * f;
-            fyi += dy * f;
-            fzi += dz * f;
-
-        }
-
-        // synchronize threads
-        __syncthreads();
-
-        j += blockDim.x;
-    }
-
-    int leftover = n - (n / blockDim.x) * blockDim.x;
-
-    // synchronize threads
-    __syncthreads();
-
-    // last bit
-    if ( threadIdx.x < leftover ) {
-        // load rj into shared memory
-        xj[threadIdx.x] = x[j + threadIdx.x];
-        yj[threadIdx.x] = y[j + threadIdx.x];
-        zj[threadIdx.x] = z[j + threadIdx.x];
-    }
-
-    // synchronize threads
-    __syncthreads();
-
-    for (int myj = 0; myj < leftover; myj++) {
-
-        double dx  = xi - xj[myj];
-        double dy  = yi - yj[myj];
-        double dz  = zi - zj[myj];
-
-        double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
-        double r6  = r2*r2*r2;
-        double r8  = r6*r2;
-        double r14 = r6*r6*r2;
-        double f   = A12 / r14 - B6 / r8;
-
-        fxi += dx * f;
-        fyi += dy * f;
-        fzi += dz * f;
-
-    }
-
-    if ( i < n ) {
-        fx[i] = fxi;
-        fy[i] = fyi;
-        fz[i] = fzi;
-    }
-}
-
-// evaluate forces on GPU
-__global__ void Forces(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6) {
-
-    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
-    int i       = blockid*blockDim.x + threadIdx.x;
-    if ( i >= n ) return;
-
-    double xi = x[i];
-    double yi = y[i];
-    double zi = z[i];
-
-    double fxi = 0.0;
-    double fyi = 0.0;
-    double fzi = 0.0;
-
-    for (int j = 0; j < n; j++) {
-        if ( j == i ) continue;
-
-        double dx  = xi - x[j];
-        double dy  = yi - y[j];
-        double dz  = zi - z[j];
-
-        double r2  = dx*dx + dy*dy + dz*dz;
-        double r6  = r2*r2*r2;
-        double r8  = r6*r2;
-        double r14 = r6*r6*r2;
-        double f   = A12 / r14 - B6 / r8;
-
-        fxi += dx * f;
-        fyi += dy * f;
-        fzi += dz * f;
-
-    }
-
-    fx[i] = fxi;
-    fy[i] = fyi;
-    fz[i] = fzi;
-
-}
+__global__ void ForcesSharedMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6);
+__global__ void ForcesGlobalMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6);
 
 void forces_gpu(int n, int nrepeats, std::string kernel, double* x,double*y,double*z,double*fx,double*fy,double*fz);
 void forces(int n, int nrepeats, double* x,double*y,double*z,double*fx,double*fy,double*fz);
@@ -493,7 +241,7 @@ void forces_gpu(int n, int nrepeats, std::string kernel, double* x,double*y,doub
     // evaluate forces on GPU
     for (int i = 0; i < nrepeats; i++) {
         if ( kernel == "gpu" ) {
-            Forces<<<dimgrid,threads_per_block>>>(n,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz,A12,B6);
+            ForcesGlobalMemory<<<dimgrid,threads_per_block>>>(n,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz,A12,B6);
         }else {
             ForcesSharedMemory<<<dimgrid,threads_per_block>>>(n,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz,A12,B6);
         }
@@ -514,4 +262,145 @@ void forces_gpu(int n, int nrepeats, std::string kernel, double* x,double*y,doub
     }
 }
 
+// CUDA kernels are below:
+
+// evaluate forces on GPU, use shared memory
+__global__ void ForcesSharedMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6) {
+
+    __shared__ double xj[NUM_THREADS];
+    __shared__ double yj[NUM_THREADS];
+    __shared__ double zj[NUM_THREADS];
+
+    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
+    int i       = blockid*blockDim.x + threadIdx.x;
+
+    double xi = 0.0;
+    double yi = 0.0;
+    double zi = 0.0;
+    if ( i < n ) {
+        xi = x[i];
+        yi = y[i];
+        zi = z[i];
+    }
+
+    double fxi = 0.0;
+    double fyi = 0.0;
+    double fzi = 0.0;
+
+    int j = 0;
+    while( j + blockDim.x <= n ) {
+
+        // load xj, yj, zj into shared memory
+        xj[threadIdx.x] = x[j + threadIdx.x];
+        yj[threadIdx.x] = y[j + threadIdx.x];
+        zj[threadIdx.x] = z[j + threadIdx.x];
+
+        // synchronize threads
+        __syncthreads();
+
+        for (int myj = 0; myj < blockDim.x; myj++) {
+
+            double dx  = xi - xj[myj];
+            double dy  = yi - yj[myj];
+            double dz  = zi - zj[myj];
+
+            double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
+            double r6  = r2*r2*r2;
+            double r8  = r6*r2;
+            double r14 = r6*r6*r2;
+            double f   = A12 / r14 - B6 / r8;
+
+            // slowest step
+            fxi += dx * f;
+            fyi += dy * f;
+            fzi += dz * f;
+
+        }
+
+        // synchronize threads
+        __syncthreads();
+
+        j += blockDim.x;
+    }
+
+    int leftover = n - (n / blockDim.x) * blockDim.x;
+
+    // synchronize threads
+    __syncthreads();
+
+    // last bit
+    if ( threadIdx.x < leftover ) {
+        // load rj into shared memory
+        xj[threadIdx.x] = x[j + threadIdx.x];
+        yj[threadIdx.x] = y[j + threadIdx.x];
+        zj[threadIdx.x] = z[j + threadIdx.x];
+    }
+
+    // synchronize threads
+    __syncthreads();
+
+    for (int myj = 0; myj < leftover; myj++) {
+
+        double dx  = xi - xj[myj];
+        double dy  = yi - yj[myj];
+        double dz  = zi - zj[myj];
+
+        double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
+        double r6  = r2*r2*r2;
+        double r8  = r6*r2;
+        double r14 = r6*r6*r2;
+        double f   = A12 / r14 - B6 / r8;
+
+        fxi += dx * f;
+        fyi += dy * f;
+        fzi += dz * f;
+
+    }
+
+    if ( i < n ) {
+        fx[i] = fxi;
+        fy[i] = fyi;
+        fz[i] = fzi;
+    }
+}
+
+// evaluate forces on GPU
+__global__ void ForcesGlobalMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6) {
+
+    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
+    int i       = blockid*blockDim.x + threadIdx.x;
+    if ( i >= n ) return;
+
+    double xi = x[i];
+    double yi = y[i];
+    double zi = z[i];
+
+    double fxi = 0.0;
+    double fyi = 0.0;
+    double fzi = 0.0;
+
+    for (int j = 0; j < n; j++) {
+        if ( j == i ) continue;
+
+        double dx  = xi - x[j];
+        double dy  = yi - y[j];
+        double dz  = zi - z[j];
+
+        double r2  = dx*dx + dy*dy + dz*dz;
+        double r6  = r2*r2*r2;
+        double r8  = r6*r2;
+        double r14 = r6*r6*r2;
+        double f   = A12 / r14 - B6 / r8;
+
+        fxi += dx * f;
+        fyi += dy * f;
+        fzi += dz * f;
+
+    }
+
+    fx[i] = fxi;
+    fy[i] = fyi;
+    fz[i] = fzi;
+
+}
 
