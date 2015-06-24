@@ -4,36 +4,43 @@
  *
  */
 
+#include <sstream>
+#include <cassert>
+
 #include<stdio.h>
-#include<stdlib.h>
-#include<math.h>
-#include<string.h>
-#include<time.h>
 
 #include<cuda.h>
-#include<cublas.h>
 #include<cuda_runtime.h>
-
-#include<omp.h>
 
 __global__ void hello() {
     printf("thread %5i from block %5i says, \"hello, world!\"\n",threadIdx.x,blockIdx.x);
 }
 
-int main (int argc, char*argv[]) {
+// main!
+int main (int argc, char* argv[]) {
 
     if ( argc != 3 ) {
         printf("\n");
-        printf("    usage: ./test.x nblocks nthreads_per_block\n");
+        printf("    hello.x -- hello from a gpu!\n");
+        printf("\n");
+        printf("    usage: ./hello.x n nblocks nthreads_per_block\n");
+        printf("\n");
+        printf("    nblocks:            number of blocks\n");
+        printf("    nthreads_per_block: number of threads per block\n");
         printf("\n");
         exit(EXIT_FAILURE);
     }
+    printf("\n");
 
-    int nblocks            = atoi(argv[1]);
-    int nthreads_per_block = atoi(argv[2]);
+    std::stringstream ss; ss << argv[1] << " " << argv[2];
+    int nblocks; ss >> nblocks;
+    int nthreads_per_block; ss >> nthreads_per_block;
 
     hello<<<nblocks,nthreads_per_block>>>();
 
     cudaDeviceReset();
+
+    printf("\n");
+
     return 0;
 }
