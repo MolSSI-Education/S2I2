@@ -9,6 +9,9 @@
 
 using namespace std;
 
+#include "diag.h"
+#include "mmult.h"
+
 double my_rand();
 double **matrix_init(int row, int col);
 void matrix_delete(double **A);
@@ -23,7 +26,6 @@ int C_DSYEV(char jobz, char uplo, int n, double *a, int lda, double *w, double *
  
 int main(int argc, char *argv[])
 {
-  int i, j;
   if(argc != 2) {
     printf("Matrix rank required as argument.\n");
     return 1;
@@ -42,42 +44,38 @@ int main(int argc, char *argv[])
   printf("Matrix A:\n");
   print_mat(A, dim, dim, stdout);
 
-  // Keep a copy
-  double **C = matrix_init(dim, dim);
-  for(i=0; i < dim; i++)
-    for(j=0; j < dim++; j++)
-      C[i][j] = A[i][j];
-
   double *w = new double[dim];
-  double *work = new double[3*dim];
-  int info;
 
   uint64_t begin = time_musec();
 
-  info = C_DSYEV('v','u', dim, A[0], dim, w, work, 3*dim);
+  double **C = matrix_init(dim, dim);
+  diag(dim, dim, A, w, 1, C, 1e-14);
 
   uint64_t end = time_musec();
   printf("Time for eigenvalue = %5.2f sec.\n", (double) (end-begin)/1000000.0);
-  printf("Info from DSYEV = %d\n", info);
 
   printf("Eigenvalues of A:\n");
-  for(i=0; i < dim; i++) printf("%20.12f\n", w[i]);
+  for(int i=0; i < dim; i++) printf("%20.12f\n", w[i]);
 
   double **B = matrix_init(dim, dim);
-  C_DGEMM('n', 't', dim, dim, dim, 1.0, A[0], dim, A[0], dim, 0.0, B[0], dim);
+
+  mmult(C, 1, C, 0, B, dim, dim, dim);
   printf("Testing orthonormality of eigenvectors:\n");
   print_mat(B, dim, dim, stdout);
 
-  C_DGEMM('n', 'n', dim, dim, dim, 1.0, A[0], dim, C[0], dim, 0.0, B[0], dim);
-  C_DGEMM('n', 't', dim, dim, dim, 1.0, B[0], dim, A[0], dim, 0.0, C[0], dim);
+  zero_matrix(B, dim, dim);
+  mmult(C, 1, A, 0, B, dim, dim, dim);
+  zero_matrix(A, dim, dim);
+  mmult(B, 0, C, 0, A, dim, dim ,dim);
+
   printf("Testing transformation:\n");
-  print_mat(C, dim, dim, stdout);
+  print_mat(A, dim, dim, stdout);
 
   matrix_delete(A);
   matrix_delete(B);
   matrix_delete(C);
+
   delete [] w;
-  delete [] work;
 
   return 0;
 }
@@ -105,7 +103,7 @@ void matrix_delete(double **A)
 void symm_matrix_fill(double **A, int dim)
 {
   for(int i=0; i < dim; i++)
-    for(int j=0; j <= i; j++)
+    for(int j=0; j <= i++; j++)
       A[i][j] = A[j][i] = my_rand();
 }
 
@@ -124,24 +122,4 @@ uint64_t time_musec()
  uint64_t ret = tv.tv_sec * 1000000 + tv.tv_usec;
 
  return ret;
-}
-
-extern "C" {
-extern void dgemm_(char*, char*, int*, int*, int*, double*, double*, int*,
-double*, int*, double*, double*, int*);
-extern void dsyev_(char*, char*, int*, double*, int*, double*, double*, int*, int*);
-}
-
-void C_DGEMM(char transa, char transb, int m, int n, int k, double alpha,
-double* a, int lda, double* b, int ldb, double beta, double* c, int ldc)
-{
-    if(m == 0 || n == 0 || k == 0) return;
-    dgemm_(&transb, &transa, &n, &m, &k, &alpha, b, &ldb, a, &lda, &beta, c, &ldc);
-}
-
-int C_DSYEV(char jobz, char uplo, int n, double *a, int lda, double *w, double *work, int lwork){
-    int info;
-    dsyev_(&jobz, &uplo, &n, a, &lda, w, work, &lwork, &info);
-
-    return info;
 }
