@@ -9,6 +9,9 @@
  *
  */
 
+#include <sstream>
+#include <cassert>
+
 #include<stdio.h>
 #include<stdlib.h>
 #include<math.h>
@@ -21,7 +24,7 @@
 
 #include<omp.h>
 
-#define NUM_THREADS  16
+#define NUM_THREADS  128
 #define MAX_BLOCKS 65535
 
 struct junk{
@@ -30,7 +33,7 @@ struct junk{
 };
 
 // evaluate forces on GPU, use shared memory, avoids bank conflicts?
-__global__ void ForcesSharedMemory2(int N, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6, unsigned long long *time) {
+__global__ void ForcesSharedMemory2(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6, unsigned long long *time) {
 
     __shared__ junk xj[NUM_THREADS];
     __shared__ junk yj[NUM_THREADS];
@@ -44,7 +47,7 @@ __global__ void ForcesSharedMemory2(int N, double * x, double * y, double * z, d
     junk xi;
     junk yi;
     junk zi;
-    if ( i < N ) {
+    if ( i < n ) {
         xi.x = x[i];
         yi.x = y[i];
         zi.x = z[i];
@@ -55,7 +58,7 @@ __global__ void ForcesSharedMemory2(int N, double * x, double * y, double * z, d
     double fzi = 0.0;
 
     int j = 0;
-    while( j + blockDim.x <= N ) {
+    while( j + blockDim.x <= n ) {
 
         // load xj, yj, zj into shared memory
         xj[threadIdx.x].x = x[j + threadIdx.x];
@@ -90,7 +93,7 @@ __global__ void ForcesSharedMemory2(int N, double * x, double * y, double * z, d
         j += blockDim.x;
     }
 
-    int leftover = N - (N / blockDim.x) * blockDim.x;
+    int leftover = n - (n / blockDim.x) * blockDim.x;
 
     // synchronize threads
     __syncthreads();
@@ -125,7 +128,7 @@ __global__ void ForcesSharedMemory2(int N, double * x, double * y, double * z, d
 
     }
 
-    if ( i < N ) {
+    if ( i < n ) {
         fx[i] = fxi;
         fy[i] = fyi;
         fz[i] = fzi;
@@ -137,7 +140,7 @@ __global__ void ForcesSharedMemory2(int N, double * x, double * y, double * z, d
 }
 
 // evaluate forces on GPU, use shared memory
-__global__ void ForcesSharedMemory(int N, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6) {
+__global__ void ForcesSharedMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6) {
 
     __shared__ double xj[NUM_THREADS];
     __shared__ double yj[NUM_THREADS];
@@ -149,7 +152,7 @@ __global__ void ForcesSharedMemory(int N, double * x, double * y, double * z, do
     double xi = 0.0;
     double yi = 0.0;
     double zi = 0.0;
-    if ( i < N ) {
+    if ( i < n ) {
         xi = x[i];
         yi = y[i];
         zi = z[i];
@@ -160,7 +163,7 @@ __global__ void ForcesSharedMemory(int N, double * x, double * y, double * z, do
     double fzi = 0.0;
 
     int j = 0;
-    while( j + blockDim.x <= N ) {
+    while( j + blockDim.x <= n ) {
 
         // load xj, yj, zj into shared memory
         xj[threadIdx.x] = x[j + threadIdx.x];
@@ -195,7 +198,7 @@ __global__ void ForcesSharedMemory(int N, double * x, double * y, double * z, do
         j += blockDim.x;
     }
 
-    int leftover = N - (N / blockDim.x) * blockDim.x;
+    int leftover = n - (n / blockDim.x) * blockDim.x;
 
     // synchronize threads
     __syncthreads();
@@ -229,7 +232,7 @@ __global__ void ForcesSharedMemory(int N, double * x, double * y, double * z, do
 
     }
 
-    if ( i < N ) {
+    if ( i < n ) {
         fx[i] = fxi;
         fy[i] = fyi;
         fz[i] = fzi;
@@ -237,11 +240,11 @@ __global__ void ForcesSharedMemory(int N, double * x, double * y, double * z, do
 }
 
 // evaluate forces on GPU
-__global__ void Forces(int N, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6) {
+__global__ void Forces(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz,double A12, double B6) {
 
     int blockid = blockIdx.x*gridDim.y + blockIdx.y;
     int i       = blockid*blockDim.x + threadIdx.x;
-    if ( i >= N ) return;
+    if ( i >= n ) return;
 
     double xi = x[i];
     double yi = y[i];
@@ -251,7 +254,7 @@ __global__ void Forces(int N, double * x, double * y, double * z, double * fx, d
     double fyi = 0.0;
     double fzi = 0.0;
 
-    for (int j = 0; j < N; j++) {
+    for (int j = 0; j < n; j++) {
         if ( j == i ) continue;
 
         double dx  = xi - x[j];
@@ -276,33 +279,102 @@ __global__ void Forces(int N, double * x, double * y, double * z, double * fx, d
 
 }
 
+void forces_gpu(int n, int nrepeats, std::string kernel, double* x,double*y,double*z,double*fx,double*fy,double*fz);
+void forces(int n, int nrepeats, double* x,double*y,double*z,double*fx,double*fy,double*fz);
+
 // main!
 int main (int argc, char* argv[]) {
-    if ( argc != 2 ) {
+    if ( argc != 4 ) {
         printf("\n");
-        printf("    usage: test.x N\n");
+        printf("    ljforces.x -- evaluate forces for lennard-jones particles\n");
+        printf("\n");
+        printf("    usage: ./ljforces.x n nrepeates kernel\n");
+        printf("\n");
+        printf("    n:        number of particles\n");
+        printf("    nrepeats: number of times to run the kernel\n");
+        printf("    kernel:   kernel type, allowed values:\n");
+        printf("              cpu = cpu code\n");
+        printf("              gpu = gpu code\n");
+        printf("              gpushared = gpu code using shared memory\n");
+        printf("              checkvalues = run cpu and gpushared kernels and check \n");
+        printf("                            difference between cpu and gpu results\n");
         printf("\n");
         exit(EXIT_FAILURE);
     }
-    int N = atoi(argv[1]);
+    printf("\n");
+
+    std::stringstream ss; ss << argv[1] << " " << argv[2] << " " << argv[3];
+    size_t n; ss >> n;
+    size_t nrepeats; ss >> nrepeats;
+    std::string kernel; ss >> kernel;
+    assert(kernel == "cpu" ||
+           kernel == "gpu"  ||
+           kernel == "gpushared" ||
+           kernel == "checkvalues" ||
+           kernel.find("block") != std::string::npos);
 
 
     // allocate cpu memory
-    double * x  = (double*)malloc(N*sizeof(double));
-    double * y  = (double*)malloc(N*sizeof(double));
-    double * z  = (double*)malloc(N*sizeof(double));
+    double * x  = (double*)malloc(n*sizeof(double));
+    double * y  = (double*)malloc(n*sizeof(double));
+    double * z  = (double*)malloc(n*sizeof(double));
 
-    double * fx = (double*)malloc(N*sizeof(double));
-    double * fy = (double*)malloc(N*sizeof(double));
-    double * fz = (double*)malloc(N*sizeof(double));
+    double * fx = (double*)malloc(n*sizeof(double));
+    double * fy = (double*)malloc(n*sizeof(double));
+    double * fz = (double*)malloc(n*sizeof(double));
 
     // random positions for the particles
     srand(0);
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i < n; i++) {
         x[i] = 1000.0 * ( (double)rand()/RAND_MAX - 1.0 ) ;
         y[i] = 1000.0 * ( (double)rand()/RAND_MAX - 1.0 ) ;
         z[i] = 1000.0 * ( (double)rand()/RAND_MAX - 1.0 ) ;
     }
+
+
+    if ( kernel == "cpu" ) {
+        forces(n,nrepeats,x,y,z,fx,fy,fz);
+    }else if ( kernel == "gpu" ) {
+        forces_gpu(n,nrepeats,kernel,x,y,z,fx,fy,fz);
+    }else if ( kernel == "gpushared") {
+        forces_gpu(n,nrepeats,kernel,x,y,z,fx,fy,fz);
+    }else if ( kernel == "checkvalues" ) {
+        forces(n,nrepeats,x,y,z,fx,fy,fz);
+        forces_gpu(n,nrepeats,"gpushared",x,y,z,fx,fy,fz);
+        // check result:
+        double dum = 0.0;
+        for (int i = 0; i < n; i++) {
+            double dum2 = fx[i] - x[i];
+            dum += dum2 * dum2;
+
+            dum2 = fy[i] - y[i];
+            dum += dum2 * dum2;
+
+            dum2 = fz[i] - z[i];
+            dum += dum2 * dum2;
+        }
+        printf("\n");
+        printf("Norm of difference in CPU and GPU forces %20.12le\n",sqrt(dum));
+        printf("\n");
+        
+    }
+
+    free(x);
+    free(y);
+    free(z);
+
+    free(fx);
+    free(fy);
+    free(fz);
+
+    cudaDeviceReset();
+    printf("\n");
+
+}
+
+void forces(int n, int nrepeats, double* x,double*y,double*z,double*fx,double*fy,double*fz) {
+
+    double start = omp_get_wtime();
 
     // LJ potential: A/r12 - B/r6
     //  ... for the purposes of this exercise, A and B do not matter
@@ -312,18 +384,17 @@ int main (int argc, char* argv[]) {
     double A12 = 12.0 * A;
     double B6  =  6.0 * B;
 
-    double start = omp_get_wtime();
-    memset((void*)fx,'\0',N*sizeof(double));
-    memset((void*)fy,'\0',N*sizeof(double));
-    memset((void*)fz,'\0',N*sizeof(double));
+    memset((void*)fx,'\0',n*sizeof(double));
+    memset((void*)fy,'\0',n*sizeof(double));
+    memset((void*)fz,'\0',n*sizeof(double));
 
     int nthreads = omp_get_max_threads();
 
     // evaluate forces many times for good timings
-    for (int k = 0; k < 1000; k++) {
+    for (int k = 0; k < nrepeats; k++) {
 
         #pragma omp parallel for schedule(dynamic) num_threads (nthreads)
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < n; i++) {
 
             double xi = x[i];
             double yi = y[i];
@@ -333,7 +404,7 @@ int main (int argc, char* argv[]) {
             double fyi = 0.0;
             double fzi = 0.0;
 
-            for (int j = 0; j < N; j++) {
+            for (int j = 0; j < n; j++) {
                 if ( i == j ) continue;
                 double dx  = xi - x[j];
                 double dy  = yi - y[j];
@@ -355,7 +426,21 @@ int main (int argc, char* argv[]) {
         }
     }
     double end = omp_get_wtime();
-    double cputime = end - start;
+
+    printf("CPU kernel:                n = %5i nrepeats = %5i time = %10.4lf s\n",n,nrepeats,end-start);
+}
+
+void forces_gpu(int n, int nrepeats, std::string kernel, double* x,double*y,double*z,double*fx,double*fy,double*fz) {
+
+    double start = omp_get_wtime();
+
+    // LJ potential: A/r12 - B/r6
+    //  ... for the purposes of this exercise, A and B do not matter
+    double A = 1.0;
+    double B = 1.0;
+
+    double A12 = 12.0 * A;
+    double B6  =  6.0 * B;
 
     // pointers to gpu memory
     double * gpu_x;
@@ -367,34 +452,34 @@ int main (int argc, char* argv[]) {
     double * gpu_fz;
 
     // allocate GPU memory
-    cudaMalloc((void**)&gpu_x,N*sizeof(double));
-    cudaMalloc((void**)&gpu_y,N*sizeof(double));
-    cudaMalloc((void**)&gpu_z,N*sizeof(double));
+    cudaMalloc((void**)&gpu_x,n*sizeof(double));
+    cudaMalloc((void**)&gpu_y,n*sizeof(double));
+    cudaMalloc((void**)&gpu_z,n*sizeof(double));
 
-    cudaMalloc((void**)&gpu_fx,N*sizeof(double));
-    cudaMalloc((void**)&gpu_fy,N*sizeof(double));
-    cudaMalloc((void**)&gpu_fz,N*sizeof(double));
+    cudaMalloc((void**)&gpu_fx,n*sizeof(double));
+    cudaMalloc((void**)&gpu_fy,n*sizeof(double));
+    cudaMalloc((void**)&gpu_fz,n*sizeof(double));
 
     // copy particle positions to GPU
-    cudaMemcpy(gpu_x,x,N*sizeof(double),cudaMemcpyHostToDevice);
-    cudaMemcpy(gpu_y,y,N*sizeof(double),cudaMemcpyHostToDevice);
-    cudaMemcpy(gpu_z,z,N*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_x,x,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_y,y,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_z,z,n*sizeof(double),cudaMemcpyHostToDevice);
 
     // set forces to zero on gpu (actually this is not necessary)
-    cudaMemset((void*)gpu_fx,'\0',N*sizeof(double));
-    cudaMemset((void*)gpu_fy,'\0',N*sizeof(double));
-    cudaMemset((void*)gpu_fz,'\0',N*sizeof(double));
+    cudaMemset((void*)gpu_fx,'\0',n*sizeof(double));
+    cudaMemset((void*)gpu_fy,'\0',n*sizeof(double));
+    cudaMemset((void*)gpu_fz,'\0',n*sizeof(double));
 
     // threads per block should be multiple of the warp
     // size (32) and has max value cudaProp.maxThreadsPerBlock
     int threads_per_block = NUM_THREADS;
     int maxblocks         = MAX_BLOCKS;
 
-    long int nblocks_x = N / threads_per_block;
+    long int nblocks_x = n / threads_per_block;
     long int nblocks_y = 1;
 
-    if ( N % threads_per_block != 0 ) {
-       nblocks_x = (N + threads_per_block - N % threads_per_block ) / threads_per_block;
+    if ( n % threads_per_block != 0 ) {
+       nblocks_x = (n + threads_per_block - n % threads_per_block ) / threads_per_block;
     }
 
     if (nblocks_x > maxblocks){
@@ -406,60 +491,27 @@ int main (int argc, char* argv[]) {
     dim3 dimgrid (nblocks_x,nblocks_y);
 
     // evaluate forces on GPU
-    start = omp_get_wtime();
-    for (int i = 0; i < 1000; i++) {
-        Forces<<<dimgrid,threads_per_block>>>(N,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz,A12,B6);
+    for (int i = 0; i < nrepeats; i++) {
+        if ( kernel == "gpu" ) {
+            Forces<<<dimgrid,threads_per_block>>>(n,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz,A12,B6);
+        }else {
+            ForcesSharedMemory<<<dimgrid,threads_per_block>>>(n,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz,A12,B6);
+        }
         cudaThreadSynchronize();
     }
-    end = omp_get_wtime();
-    double gputime = end - start;
-
-
-    // evaluate forces on GPU (using shared memory)
-    unsigned long long time;
-    unsigned long long * d_time;
-    cudaMalloc(&d_time,sizeof(unsigned long long));
-    start = omp_get_wtime();
-    for (int i = 0; i < 1000; i++) {
-        ForcesSharedMemory<<<dimgrid,threads_per_block>>>(N,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz,A12,B6);
-        cudaThreadSynchronize();
-    }
-    end = omp_get_wtime();
-    double gputime2 = end - start;
-
-    start = omp_get_wtime();
-    for (int i = 0; i < 1000; i++) {
-        ForcesSharedMemory2<<<dimgrid,threads_per_block>>>(N,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz,A12,B6,d_time);
-        cudaThreadSynchronize();
-    }
-    end = omp_get_wtime();
-    double gputime3 = end - start;
 
     // copy forces back from GPU to check against CPU results
-    cudaMemcpy(x,gpu_fx,N*sizeof(double),cudaMemcpyDeviceToHost);
-    cudaMemcpy(y,gpu_fy,N*sizeof(double),cudaMemcpyDeviceToHost);
-    cudaMemcpy(z,gpu_fz,N*sizeof(double),cudaMemcpyDeviceToHost);
+    cudaMemcpy(x,gpu_fx,n*sizeof(double),cudaMemcpyDeviceToHost);
+    cudaMemcpy(y,gpu_fy,n*sizeof(double),cudaMemcpyDeviceToHost);
+    cudaMemcpy(z,gpu_fz,n*sizeof(double),cudaMemcpyDeviceToHost);
 
-    // check result:
-    double dum = 0.0;
-    for (int i = 0; i < N; i++) {
+    double end = omp_get_wtime();
 
-        double dum3 = 0.0;
-
-        double dum2 = fx[i] - x[i];
-        dum3 += dum2 * dum2;
-
-        dum2 = fy[i] - y[i];
-        dum3 += dum2 * dum2;
-
-        dum2 = fz[i] - z[i];
-        dum3 += dum2 * dum2;
-
-        dum += dum3;
-
+    if ( kernel == "gpu" ) {
+        printf("GPU kernel:                n = %5i nrepeats = %5i time = %10.4lf s\n",n,nrepeats,end-start);
+    }else{
+        printf("GPU shared memory kernel:  n = %5i nrepeats = %5i time = %10.4lf s\n",n,nrepeats,end-start);
     }
-
-    // print timings and errors
-    printf("%8i %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf\n",N,cputime,gputime,gputime2,gputime3,cputime/gputime,cputime/gputime2,cputime/gputime3,gputime/gputime2,gputime2/gputime3,dum);
-
 }
+
+
