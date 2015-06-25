@@ -28,7 +28,7 @@
 ** NB this code uses system functions ctime(), time(), and times(),
 ** which may not quite be standard on all machines.
 **
-** T. Daniel Crawford, August 1999.  
+** Copyright: T. Daniel Crawford, August 1999.  
 */
 
 #include <cstdio>
