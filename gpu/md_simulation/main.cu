@@ -4,8 +4,8 @@
  * Eugene DePrince
  * 
  * This code can be used to run a simple molecular dynamics
- * simulation for argon.  There are no periodic boundary
- * conditions, the temperature is not constant
+ * simulation for argon.  There are periodic boundary
+ * conditions, but the temperature is not constant.
  *
  */
 
@@ -24,12 +24,6 @@
 #define NUM_THREADS  128
 #define MAX_BLOCKS 65535
 
-__global__ void ForcesSharedMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz);
-__global__ void ForcesGlobalMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz);
-
-void forces_gpu(int n, int nrepeats, std::string kernel, double* x,double*y,double*z,double*fx,double*fy,double*fz);
-void forces(int n, int nrepeats, double* x,double*y,double*z,double*fx,double*fy,double*fz);
-
 void InitialVelocity(int n,double * vx,double * vy,double * vz,double temp);
 void InitialPosition(int n,double box,double * x,double * y,double * z);
 
@@ -39,8 +33,8 @@ void UpdatePosition(int n,double* x,double*y,double*z,double* vx,double*vy,doubl
 void UpdateVelocity(int n,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt);
 void UpdateAcceleration(int n,double box,double* x,double*y,double*z,double* ax,double*ay,double*az);
 
-// main!
 int main (int argc, char* argv[]) {
+
     if ( argc != 5 ) {
         printf("\n");
         printf("    md.x -- simple molecular dynamics simulation for argon\n");
@@ -49,13 +43,15 @@ int main (int argc, char* argv[]) {
         printf("\n");
         printf("    n:        number of particles\n");
         printf("    density:  density, which determines the box length\n");
-        printf("              (unstable for density > ~0.1)\n");
+        printf("              (unstable for density > ~0.5)\n");
         printf("    time:     total simulation time ( x 2.17 x 10^-12 s)\n");
-        printf("    temp:     temperature\n");
+        printf("    temp:     temperature (~1.0)\n");
         printf("\n");
         exit(EXIT_FAILURE);
     }
     printf("\n");
+
+    double start = omp_get_wtime();
 
     std::stringstream ss; ss << argv[1] << " " << argv[2] << " " << argv[3] << " " << argv[4];
 
@@ -84,7 +80,7 @@ int main (int argc, char* argv[]) {
     double * y  = (double*)malloc(n*sizeof(double));
     double * z  = (double*)malloc(n*sizeof(double));
 
-    // velocity
+    // acceleration
     double * ax = (double*)malloc(n*sizeof(double));
     double * ay = (double*)malloc(n*sizeof(double));
     double * az = (double*)malloc(n*sizeof(double));
@@ -92,7 +88,7 @@ int main (int argc, char* argv[]) {
     memset((void*)ay,'\0',n*sizeof(double));
     memset((void*)az,'\0',n*sizeof(double));
 
-    // acceleration
+    // velocity
     double * vx = (double*)malloc(n*sizeof(double));
     double * vy = (double*)malloc(n*sizeof(double));
     double * vz = (double*)malloc(n*sizeof(double));
@@ -105,11 +101,12 @@ int main (int argc, char* argv[]) {
     double binsize = box / (nbins - 1);
     int * g = (int*)malloc(nbins * sizeof(int));
     memset((void*)g,'\0',nbins*sizeof(int));
-    PairCorrelationFunction(n,nbins,box,x,y,z,g);
 
     // dynamics:
     double dt = 0.01;
     double  t = 0.0;
+    int npts = 0;
+    int iter = 0;
     do { 
 
         UpdatePosition(n,x,y,z,vx,vy,vz,ax,ay,az,dt,box);
@@ -119,21 +116,29 @@ int main (int argc, char* argv[]) {
         UpdateAcceleration(n,box,x,y,z,ax,ay,az);
 
         UpdateVelocity(n,vx,vy,vz,ax,ay,az,dt);
-       
-        PairCorrelationFunction(n,nbins,box,x,y,z,g);
+      
+        if ( (iter+1) % 100 == 0 ) { 
+            PairCorrelationFunction(n,nbins,box,x,y,z,g);
+            npts++;
+        }
 
         t += dt; 
+        iter++;
 
     }while(t  < ttot);
 
     // print pair correlation function
 
-    // g(r) = g(r) / rho / shell_volume(r)
-    int npts = (int)(ttot / dt);
-    for (int i = 0; i < nbins; i++) {
+    // g(r) = g(r) / rho / shell_volume(r) / n
+    printf("\n");
+    printf("    #  ==> radial distribution function <==\n");
+    printf("\n");
+    printf("    #                  r");
+    printf("                 g(r)\n");
+    for (int i = 1; i < nbins; i++) {
 
         double shell_volume = 4.0 * M_PI * pow(i*binsize,2.0) * binsize;
-        printf("%20.12lf %20.12lf\n",i*binsize,  1.0 * g[i] / shell_volume / density / npts);
+        printf("%20.12lf %20.12lf\n",i*binsize,  1.0 * g[i] / shell_volume / density / npts / n);
     }
 
     free(x);
@@ -148,7 +153,12 @@ int main (int argc, char* argv[]) {
     free(ay);
     free(az);
 
-    //cudaDeviceReset();
+    free(g);
+
+    double end = omp_get_wtime();
+
+    printf("\n");
+    printf("    # total wall time for simulation: %10.2lf s\n",end-start);
     printf("\n");
 
 }
@@ -160,13 +170,16 @@ void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,do
     double binsize = box / (nbins - 1);
     double halfbox = 0.5 * box;
 
-    for (int i = 0; i < 1; i++) {
+    int nthreads = omp_get_max_threads();
+
+    #pragma omp parallel for schedule(dynamic) num_threads (nthreads)
+    for (int i = 0; i < n; i++) {
         double xi = x[i];
         double yi = y[i];
         double zi = z[i];
 
-        for (int j = i+1; j < n; j++) {
-            //if ( i == j ) continue;
+        for (int j = 0; j < n; j++) {
+            if ( i == j ) continue;
 
             double dx  = xi - x[j];
             double dy  = yi - y[j];
@@ -291,6 +304,10 @@ void InitialVelocity(int n,double * vx,double * vy,double * vz, double temp) {
    
     // scale velocities for appropriate temp 
     double lambda = sqrt ( 3.0 * (n - 1) * temp / v2 );
+
+    int nthreads = omp_get_max_threads();
+
+    #pragma omp parallel for schedule(dynamic) num_threads (nthreads)
     for (int i = 0; i < n; i++) {
         vx[i] *= lambda;
         vy[i] *= lambda;
@@ -304,7 +321,10 @@ void UpdatePosition(int n,double* x,double*y,double*z,double* vx,double*vy,doubl
 
     double halfdt2 = 0.5 * dt * dt;
 
+    int nthreads = omp_get_max_threads();
+
     // could use daxpy ...
+    #pragma omp parallel for schedule(dynamic) num_threads (nthreads)
     for (int i = 0; i < n; i++) {
         x[i] += vx[i] * dt + ax[i] * halfdt2;
         y[i] += vy[i] * dt + ay[i] * halfdt2;
@@ -330,7 +350,10 @@ void UpdateVelocity(int n,double* vx,double*vy,double*vz,double* ax,double*ay,do
 
     double halfdt = 0.5 * dt;
 
+    int nthreads = omp_get_max_threads();
+
     // could use daxpy ...
+    #pragma omp parallel for schedule(dynamic) num_threads (nthreads)
     for (int i = 0; i < n; i++) {
         vx[i] += ax[i] * halfdt;
         vy[i] += ay[i] * halfdt;
@@ -341,9 +364,9 @@ void UpdateVelocity(int n,double* vx,double*vy,double*vz,double* ax,double*ay,do
 
 void UpdateAcceleration(int n,double box,double* x,double*y,double*z,double* ax,double*ay,double*az) {
 
-    int nthreads = omp_get_max_threads();
-
     double halfbox = 0.5 * box;
+
+    int nthreads = omp_get_max_threads();
 
     #pragma omp parallel for schedule(dynamic) num_threads (nthreads)
     for (int i = 0; i < n; i++) {
@@ -398,224 +421,3 @@ void UpdateAcceleration(int n,double box,double* x,double*y,double*z,double* ax,
 
 }
 
-/*
-void forces_gpu(int n, int nrepeats, std::string kernel, double* x,double*y,double*z,double*fx,double*fy,double*fz) {
-
-    double start = omp_get_wtime();
-
-    // pointers to gpu memory
-    double * gpu_x;
-    double * gpu_y;
-    double * gpu_z;
-
-    double * gpu_fx;
-    double * gpu_fy;
-    double * gpu_fz;
-
-    // allocate GPU memory
-    cudaMalloc((void**)&gpu_x,n*sizeof(double));
-    cudaMalloc((void**)&gpu_y,n*sizeof(double));
-    cudaMalloc((void**)&gpu_z,n*sizeof(double));
-
-    cudaMalloc((void**)&gpu_fx,n*sizeof(double));
-    cudaMalloc((void**)&gpu_fy,n*sizeof(double));
-    cudaMalloc((void**)&gpu_fz,n*sizeof(double));
-
-    // copy particle positions to GPU
-    cudaMemcpy(gpu_x,x,n*sizeof(double),cudaMemcpyHostToDevice);
-    cudaMemcpy(gpu_y,y,n*sizeof(double),cudaMemcpyHostToDevice);
-    cudaMemcpy(gpu_z,z,n*sizeof(double),cudaMemcpyHostToDevice);
-
-    // set forces to zero on gpu (actually this is not necessary)
-    cudaMemset((void*)gpu_fx,'\0',n*sizeof(double));
-    cudaMemset((void*)gpu_fy,'\0',n*sizeof(double));
-    cudaMemset((void*)gpu_fz,'\0',n*sizeof(double));
-
-    // threads per block should be multiple of the warp
-    // size (32) and has max value cudaProp.maxThreadsPerBlock
-    int threads_per_block = NUM_THREADS;
-    int maxblocks         = MAX_BLOCKS;
-
-    long int nblocks_x = n / threads_per_block;
-    long int nblocks_y = 1;
-
-    if ( n % threads_per_block != 0 ) {
-       nblocks_x = (n + threads_per_block - n % threads_per_block ) / threads_per_block;
-    }
-
-    if (nblocks_x > maxblocks){
-       nblocks_y = nblocks_x / maxblocks + 1;
-       nblocks_x = nblocks_x / nblocks_y + 1;
-    }
-
-    // a two-dimensional grid: nblocks_x by nblocks_y
-    dim3 dimgrid (nblocks_x,nblocks_y);
-
-    // evaluate forces on GPU
-    for (int i = 0; i < nrepeats; i++) {
-        if ( kernel == "gpu" ) {
-            ForcesGlobalMemory<<<dimgrid,threads_per_block>>>(n,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz);
-        }else {
-            ForcesSharedMemory<<<dimgrid,threads_per_block>>>(n,gpu_x,gpu_y,gpu_z,gpu_fx,gpu_fy,gpu_fz);
-        }
-        cudaThreadSynchronize();
-    }
-
-    // copy forces back from GPU to check against CPU results
-    cudaMemcpy(x,gpu_fx,n*sizeof(double),cudaMemcpyDeviceToHost);
-    cudaMemcpy(y,gpu_fy,n*sizeof(double),cudaMemcpyDeviceToHost);
-    cudaMemcpy(z,gpu_fz,n*sizeof(double),cudaMemcpyDeviceToHost);
-
-    double end = omp_get_wtime();
-
-    if ( kernel == "gpu" ) {
-        printf("GPU kernel:                n = %5i nrepeats = %5i time = %10.4lf s\n",n,nrepeats,end-start);
-    }else{
-        printf("GPU shared memory kernel:  n = %5i nrepeats = %5i time = %10.4lf s\n",n,nrepeats,end-start);
-    }
-}
-
-// CUDA kernels are below:
-
-// evaluate forces on GPU, use shared memory
-__global__ void ForcesSharedMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz) {
-
-    __shared__ double xj[NUM_THREADS];
-    __shared__ double yj[NUM_THREADS];
-    __shared__ double zj[NUM_THREADS];
-
-    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
-    int i       = blockid*blockDim.x + threadIdx.x;
-
-    double xi = 0.0;
-    double yi = 0.0;
-    double zi = 0.0;
-    if ( i < n ) {
-        xi = x[i];
-        yi = y[i];
-        zi = z[i];
-    }
-
-    double fxi = 0.0;
-    double fyi = 0.0;
-    double fzi = 0.0;
-
-    int j = 0;
-    while( j + blockDim.x <= n ) {
-
-        // load xj, yj, zj into shared memory
-        xj[threadIdx.x] = x[j + threadIdx.x];
-        yj[threadIdx.x] = y[j + threadIdx.x];
-        zj[threadIdx.x] = z[j + threadIdx.x];
-
-        // synchronize threads
-        __syncthreads();
-
-        for (int myj = 0; myj < blockDim.x; myj++) {
-
-            double dx  = xi - xj[myj];
-            double dy  = yi - yj[myj];
-            double dz  = zi - zj[myj];
-
-            double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
-            double r6  = r2*r2*r2;
-            double r8  = r6*r2;
-            double r14 = r6*r6*r2;
-            double f   = 2.0 / r14 - 1.0 / r8;
-
-            // slowest step
-            fxi += dx * f;
-            fyi += dy * f;
-            fzi += dz * f;
-
-        }
-
-        // synchronize threads
-        __syncthreads();
-
-        j += blockDim.x;
-    }
-
-    int leftover = n - (n / blockDim.x) * blockDim.x;
-
-    // synchronize threads
-    __syncthreads();
-
-    // last bit
-    if ( threadIdx.x < leftover ) {
-        // load rj into shared memory
-        xj[threadIdx.x] = x[j + threadIdx.x];
-        yj[threadIdx.x] = y[j + threadIdx.x];
-        zj[threadIdx.x] = z[j + threadIdx.x];
-    }
-
-    // synchronize threads
-    __syncthreads();
-
-    for (int myj = 0; myj < leftover; myj++) {
-
-        double dx  = xi - xj[myj];
-        double dy  = yi - yj[myj];
-        double dz  = zi - zj[myj];
-
-        double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
-        double r6  = r2*r2*r2;
-        double r8  = r6*r2;
-        double r14 = r6*r6*r2;
-        double f   = 2.0 / r14 - 1.0 / r8;
-
-        fxi += dx * f;
-        fyi += dy * f;
-        fzi += dz * f;
-
-    }
-
-    if ( i < n ) {
-        fx[i] = 2.0 * fxi;
-        fy[i] = 2.0 * fyi;
-        fz[i] = 2.0 * fzi;
-    }
-}
-
-// evaluate forces on GPU
-__global__ void ForcesGlobalMemory(int n, double * x, double * y, double * z, double * fx, double * fy, double * fz) {
-
-    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
-    int i       = blockid*blockDim.x + threadIdx.x;
-    if ( i >= n ) return;
-
-    double xi = x[i];
-    double yi = y[i];
-    double zi = z[i];
-
-    double fxi = 0.0;
-    double fyi = 0.0;
-    double fzi = 0.0;
-
-    for (int j = 0; j < n; j++) {
-        if ( j == i ) continue;
-
-        double dx  = xi - x[j];
-        double dy  = yi - y[j];
-        double dz  = zi - z[j];
-
-        double r2  = dx*dx + dy*dy + dz*dz;
-        double r6  = r2*r2*r2;
-        double r8  = r6*r2;
-        double r14 = r6*r6*r2;
-        double f   = 2.0 / r14 - 1.0 / r8;
-
-        fxi += dx * f;
-        fyi += dy * f;
-        fzi += dz * f;
-
-    }
-
-    fx[i] = 24.0 * fxi;
-    fy[i] = 24.0 * fyi;
-    fz[i] = 24.0 * fzi;
-
-}
-
-
-*/
