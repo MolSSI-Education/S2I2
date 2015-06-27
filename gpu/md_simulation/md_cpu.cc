@@ -52,7 +52,7 @@ int main (int argc, char* argv[]) {
     }
     printf("\n");
 
-    double start = omp_get_wtime();
+    double start_total = omp_get_wtime();
 
     std::stringstream ss; ss << argv[1] << " " << argv[2] << " " << argv[3] << " " << argv[4];
 
@@ -108,19 +108,41 @@ int main (int argc, char* argv[]) {
     double  t = 0.0;
     int npts = 0;
     int iter = 0;
+
+    // individual timers ... which kernels are the most expensive?
+    double pos_time = 0.0;
+    double vel_time = 0.0;
+    double acc_time = 0.0;
+    double cor_time = 0.0;
+
     do { 
 
+        double start = omp_get_wtime();
         UpdatePosition(n,x,y,z,vx,vy,vz,ax,ay,az,dt,box);
+        double end = omp_get_wtime();
+        pos_time += end - start;
 
+        start = omp_get_wtime();
         UpdateVelocity(n,vx,vy,vz,ax,ay,az,dt);
+        end = omp_get_wtime();
+        vel_time += end - start;
 
+        start = omp_get_wtime();
         UpdateAcceleration(n,box,x,y,z,ax,ay,az);
+        end = omp_get_wtime();
+        acc_time += end - start;
 
+        start = omp_get_wtime();
         UpdateVelocity(n,vx,vy,vz,ax,ay,az,dt);
+        end = omp_get_wtime();
+        vel_time += end - start;
       
         if ( (iter+1) % 100 == 0 ) { 
+            start = omp_get_wtime();
             PairCorrelationFunction(n,nbins,box,x,y,z,g);
             npts++;
+            end = omp_get_wtime();
+            cor_time += end - start;
         }
 
         t += dt; 
@@ -156,10 +178,15 @@ int main (int argc, char* argv[]) {
 
     free(g);
 
-    double end = omp_get_wtime();
+    double end_total = omp_get_wtime();
 
     printf("\n");
-    printf("    # total wall time for simulation: %10.2lf s\n",end-start);
+    printf("    # time for position updates:          %10.2lf s\n",pos_time);
+    printf("    # time for velocity updates:          %10.2lf s\n",vel_time);
+    printf("    # time for acceleration updates:      %10.2lf s\n",acc_time);
+    printf("    # time for pair correlation function: %10.2lf s\n",cor_time);
+    printf("\n");
+    printf("    # total wall time for simulation: %10.2lf s\n",end_total-start_total);
     printf("\n");
 
 }

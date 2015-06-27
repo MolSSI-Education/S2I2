@@ -116,7 +116,6 @@ int main (int argc, char* argv[]) {
     int npts = 0;
     int iter = 0;
 
-
     // individual timers ... which kernels are the most expensive?
     double pos_time = 0.0;
     double vel_time = 0.0;
