@@ -153,8 +153,8 @@ int main (int argc, char* argv[]) {
         vel_time += end - start;
 
         start = omp_get_wtime();
-        UpdateAcceleration(n,box,x,y,z,ax,ay,az);
-        //UpdateAccelerationGPU(n,box,x,y,z,ax,ay,az,gpux,gpuy,gpuz,gpuax,gpuay,gpuaz);
+        //UpdateAcceleration(n,box,x,y,z,ax,ay,az);
+        UpdateAccelerationGPU(n,box,x,y,z,ax,ay,az,gpux,gpuy,gpuz,gpuax,gpuay,gpuaz);
         end = omp_get_wtime();
         acc_time += end - start;
 
