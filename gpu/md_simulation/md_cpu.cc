@@ -15,14 +15,15 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+#include<math.h>
+#include<time.h>
 
-#include<cuda.h>
-#include<cuda_runtime.h>
-
-#include<omp.h>
-
-#define NUM_THREADS  128
-#define MAX_BLOCKS 65535
+#ifdef _OPENMP
+    #include<omp.h>
+#else
+    #define omp_get_wtime() clock()/CLOCKS_PER_SEC
+    #define omp_get_max_threads() 1
+#endif
 
 void InitialVelocity(int n,double * vx,double * vy,double * vz,double temp);
 void InitialPosition(int n,double box,double * x,double * y,double * z);
@@ -37,9 +38,9 @@ int main (int argc, char* argv[]) {
 
     if ( argc != 5 ) {
         printf("\n");
-        printf("    md.x -- simple molecular dynamics simulation for argon\n");
+        printf("    md_cpu.x -- cpu molecular dynamics simulation for argon\n");
         printf("\n");
-        printf("    usage: ./md.x n density time temp\n");
+        printf("    usage: ./md_cpu.x n density time temp\n");
         printf("\n");
         printf("    n:        number of particles\n");
         printf("    density:  density, which determines the box length\n");
@@ -272,14 +273,14 @@ void InitialVelocity(int n,double * vx,double * vy,double * vz, double temp) {
         double X = sqrt(-2.0 * log(U)) * cos(2.0*M_PI*V);
         double Y = sqrt(-2.0 * log(U)) * sin(2.0*M_PI*V);
 
-        vx[i] = vcen * X;
-        vy[i] = vcen * Y;
+        vx[i] = 0.01;//vcen * X;
+        vy[i] = 0.01;//vcen * Y;
 
         U = (double)rand()/RAND_MAX;
         V = (double)rand()/RAND_MAX;
         X = sqrt(-2.0 * log(U)) * cos(2.0*M_PI*V);
 
-        vz[i] = vcen * X;
+        vz[i] = 0.01;//vcen * X;
 
         comx += vx[i];
         comy += vy[i];
