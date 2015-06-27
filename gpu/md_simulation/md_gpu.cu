@@ -30,17 +30,20 @@
 #define MAX_BLOCKS 65535
 
 __global__ void AccelerationSharedMemory(int n, double box, double * x, double * y, double * z, double * ax, double * ay, double * az);
+__global__ void PairCorrelationFunctionGPU(int n, int nbins, double box,double * x,double * y,double * z,unsigned int * g);
 
 void InitialVelocity(int n,double * vx,double * vy,double * vz,double temp);
 void InitialPosition(int n,double box,double * x,double * y,double * z);
 
-void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,double * z,int * g);
+void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,double * z,unsigned int * g);
 
 void UpdatePosition(int n,double* x,double*y,double*z,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt,double box);
+
 void UpdateVelocity(int n,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt);
+
 void UpdateAcceleration(int n,double box,double* x,double*y,double*z,double* ax,double*ay,double*az);
 void UpdateAccelerationGPU(int n,double box,double* x,double*y,double*z,double* ax,double*ay,double*az,
-                                            double* gpux,double*gpuy,double*gpuz,double* gpuax,double*gpuay,double*gpuaz);
+                                            double* gpu_x,double*gpu_y,double*gpu_z,double* gpu_ax,double*gpu_ay,double*gpu_az);
 
 int main (int argc, char* argv[]) {
 
@@ -107,8 +110,8 @@ int main (int argc, char* argv[]) {
 
     // pair correlation function
     int nbins = 1000;
-    int * g = (int*)malloc(nbins * sizeof(int));
-    memset((void*)g,'\0',nbins*sizeof(int));
+    unsigned int * g = (unsigned int*)malloc(nbins * sizeof(unsigned int));
+    memset((void*)g,'\0',nbins*sizeof(unsigned int));
 
     // dynamics:
     double dt = 0.01;
@@ -123,21 +126,48 @@ int main (int argc, char* argv[]) {
     double cor_time = 0.0;
 
     // gpu memory:
-    double * gpux;
-    double * gpuy;
-    double * gpuz;
+    double * gpu_x;
+    double * gpu_y;
+    double * gpu_z;
 
-    double * gpuax;
-    double * gpuay;
-    double * gpuaz;
+    double * gpu_ax;
+    double * gpu_ay;
+    double * gpu_az;
 
-    cudaMalloc((void**)&gpux,n*sizeof(double));
-    cudaMalloc((void**)&gpuy,n*sizeof(double));
-    cudaMalloc((void**)&gpuz,n*sizeof(double));
+    unsigned int * gpu_g;
 
-    cudaMalloc((void**)&gpuax,n*sizeof(double));
-    cudaMalloc((void**)&gpuay,n*sizeof(double));
-    cudaMalloc((void**)&gpuaz,n*sizeof(double));
+    cudaMalloc((void**)&gpu_x,n*sizeof(double));
+    cudaMalloc((void**)&gpu_y,n*sizeof(double));
+    cudaMalloc((void**)&gpu_z,n*sizeof(double));
+
+    cudaMalloc((void**)&gpu_ax,n*sizeof(double));
+    cudaMalloc((void**)&gpu_ay,n*sizeof(double));
+    cudaMalloc((void**)&gpu_az,n*sizeof(double));
+
+    // pair correlation function
+    cudaMalloc((void**)&gpu_g,nbins*sizeof(unsigned int));
+    cudaMemset((void*)gpu_g,'\0',nbins*sizeof(unsigned int));
+
+    // threads per block should be multiple of the warp
+    // size (32) and has max value cudaProp.maxThreadsPerBlock
+    int threads_per_block = NUM_THREADS;
+    int maxblocks         = MAX_BLOCKS;
+
+    long int nblocks_x = n / threads_per_block;
+    long int nblocks_y = 1;
+
+    if ( n % threads_per_block != 0 ) {
+       nblocks_x = (n + threads_per_block - n % threads_per_block ) / threads_per_block;
+    }
+
+    if (nblocks_x > maxblocks){
+       nblocks_y = nblocks_x / maxblocks + 1;
+       nblocks_x = nblocks_x / nblocks_y + 1;
+    }
+
+    // a two-dimensional grid: nblocks_x by nblocks_y
+    dim3 dimgrid (nblocks_x,nblocks_y);
+
 
     do { 
 
@@ -153,7 +183,7 @@ int main (int argc, char* argv[]) {
 
         start = omp_get_wtime();
         //UpdateAcceleration(n,box,x,y,z,ax,ay,az);
-        UpdateAccelerationGPU(n,box,x,y,z,ax,ay,az,gpux,gpuy,gpuz,gpuax,gpuay,gpuaz);
+        UpdateAccelerationGPU(n,box,x,y,z,ax,ay,az,gpu_x,gpu_y,gpu_z,gpu_ax,gpu_ay,gpu_az);
         end = omp_get_wtime();
         acc_time += end - start;
 
@@ -164,7 +194,9 @@ int main (int argc, char* argv[]) {
       
         if ( (iter+1) % 100 == 0 ) { 
             start = omp_get_wtime();
-            PairCorrelationFunction(n,nbins,box,x,y,z,g);
+            //PairCorrelationFunction(n,nbins,box,x,y,z,g);
+            PairCorrelationFunctionGPU<<<dimgrid,threads_per_block>>>(n,nbins,box,gpu_x,gpu_y,gpu_z,gpu_g);
+            cudaThreadSynchronize();
             npts++;
             end = omp_get_wtime();
             cor_time += end - start;
@@ -184,6 +216,7 @@ int main (int argc, char* argv[]) {
     printf("    #                  r");
     printf("                 g(r)\n");
     double binsize = box / (nbins - 1);
+    cudaMemcpy(g,gpu_g,nbins*sizeof(unsigned int),cudaMemcpyDeviceToHost);
     for (int i = 1; i < nbins; i++) {
 
         double shell_volume = 4.0 * M_PI * pow(i*binsize,2.0) * binsize;
@@ -219,7 +252,7 @@ int main (int argc, char* argv[]) {
 
 // accumulate pair correlation function.
 // we'll take the average at the end of the simulation.
-void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,double * z,int * g) {
+void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,double * z,unsigned int * g) {
 
     double binsize = box / (nbins - 1);
 
@@ -398,10 +431,10 @@ void UpdateVelocity(int n,double* vx,double*vy,double*vz,double* ax,double*ay,do
 }
 
 void UpdateAccelerationGPU(int n,double box,double* x,double*y,double*z,double* ax,double*ay,double*az,
-                                            double* gpux,double*gpuy,double*gpuz,double* gpuax,double*gpuay,double*gpuaz) {
-    cudaMemcpy(gpux,x,n*sizeof(double),cudaMemcpyHostToDevice);
-    cudaMemcpy(gpuy,y,n*sizeof(double),cudaMemcpyHostToDevice);
-    cudaMemcpy(gpuz,z,n*sizeof(double),cudaMemcpyHostToDevice);
+                                            double* gpu_x,double*gpu_y,double*gpu_z,double* gpu_ax,double*gpu_ay,double*gpu_az) {
+    cudaMemcpy(gpu_x,x,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_y,y,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_z,z,n*sizeof(double),cudaMemcpyHostToDevice);
 
     // threads per block should be multiple of the warp
     // size (32) and has max value cudaProp.maxThreadsPerBlock
@@ -424,12 +457,12 @@ void UpdateAccelerationGPU(int n,double box,double* x,double*y,double*z,double* 
     dim3 dimgrid (nblocks_x,nblocks_y);
 
     // evaluate acceleration on GPU
-    AccelerationSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpux,gpuy,gpuz,gpuax,gpuay,gpuaz);
+    AccelerationSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_ax,gpu_ay,gpu_az);
     cudaThreadSynchronize();
     
-    cudaMemcpy(ax,gpuax,n*sizeof(double),cudaMemcpyDeviceToHost);
-    cudaMemcpy(ay,gpuay,n*sizeof(double),cudaMemcpyDeviceToHost);
-    cudaMemcpy(az,gpuaz,n*sizeof(double),cudaMemcpyDeviceToHost);
+    cudaMemcpy(ax,gpu_ax,n*sizeof(double),cudaMemcpyDeviceToHost);
+    cudaMemcpy(ay,gpu_ay,n*sizeof(double),cudaMemcpyDeviceToHost);
+    cudaMemcpy(az,gpu_az,n*sizeof(double),cudaMemcpyDeviceToHost);
 }
 
 
@@ -626,5 +659,121 @@ __global__ void AccelerationSharedMemory(int n, double box, double * x, double *
         ay[i] = 24.0 * ayi;
         az[i] = 24.0 * azi;
     }
+}
+// evaluate forces on GPU, use shared memory
+__global__ void PairCorrelationFunctionGPU(int n, int nbins, double box, double * x, double * y, double * z, unsigned int * g) {
+
+    __shared__ double xj[NUM_THREADS];
+    __shared__ double yj[NUM_THREADS];
+    __shared__ double zj[NUM_THREADS];
+
+    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
+    int i       = blockid*blockDim.x + threadIdx.x;
+
+    double binsize = box / (double)(nbins - 1);
+
+    double xi = -1000000000.0;
+    double yi = -1000000000.0;
+    double zi = -1000000000.0;
+
+    if ( i < n ) {
+        xi = x[i];
+        yi = y[i];
+        zi = z[i];
+    }
+
+    int j = 0;
+
+    while( j + blockDim.x <= n ) {
+
+        // load xj, yj, zj into shared memory
+        xj[threadIdx.x] = x[j + threadIdx.x];
+        yj[threadIdx.x] = y[j + threadIdx.x];
+        zj[threadIdx.x] = z[j + threadIdx.x];
+
+        // synchronize threads
+        __syncthreads();
+
+        for (int myj = 0; myj < blockDim.x; myj++) {
+
+            double dx  = xi - xj[myj];
+            double dy  = yi - yj[myj];
+            double dz  = zi - zj[myj];
+
+            // all 27 images:
+            for (int x = -1; x < 2; x++) {
+                for (int y = -1; y < 2; y++) {
+                    for (int z = -1; z < 2; z++) {
+                        dx += x * box;
+                        dy += y * box;
+                        dz += z * box;
+
+                        double r2  = dx*dx + dy*dy + dz*dz  + 1000000000000.0 * ((j+myj)==i);
+                        double r = sqrt(r2);
+                        int mybin = (int)( r / binsize );
+ 
+                        if ( mybin < nbins ) 
+                            atomicAdd(&g[mybin],1);
+
+                        dx -= x * box;
+                        dy -= y * box;
+                        dz -= z * box;
+                    }
+                }
+            }
+        }
+
+        // synchronize threads
+        __syncthreads();
+
+        j += blockDim.x;
+    }
+
+    int leftover = n - (n / blockDim.x) * blockDim.x;
+
+    // synchronize threads
+    __syncthreads();
+
+    // last bit
+    if ( threadIdx.x < leftover ) {
+        // load rj into shared memory
+        xj[threadIdx.x] = x[j + threadIdx.x];
+        yj[threadIdx.x] = y[j + threadIdx.x];
+        zj[threadIdx.x] = z[j + threadIdx.x];
+    }
+
+    // synchronize threads
+    __syncthreads();
+
+    for (int myj = 0; myj < leftover; myj++) {
+
+        double dx  = xi - xj[myj];
+        double dy  = yi - yj[myj];
+        double dz  = zi - zj[myj];
+
+        // all 27 images:
+        for (int x = -1; x < 2; x++) {
+            for (int y = -1; y < 2; y++) {
+                for (int z = -1; z < 2; z++) {
+                    dx += x * box;
+                    dy += y * box;
+                    dz += z * box;
+
+                    double r2  = dx*dx + dy*dy + dz*dz  + 10000000.0 * ((j+myj)==i);
+                    double r = sqrt(r2);
+                    int mybin = (int)( r / binsize );
+
+                    if ( mybin < nbins )
+                        atomicAdd(&g[mybin],1);
+    
+                    dx -= x * box;
+                    dy -= y * box;
+                    dz -= z * box;
+                }
+            }
+        }
+    }
+    __syncthreads();
+
 }
 
