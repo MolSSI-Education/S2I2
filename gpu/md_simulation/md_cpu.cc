@@ -196,7 +196,6 @@ int main (int argc, char* argv[]) {
 void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,double * z,int * g) {
 
     double binsize = box / (nbins - 1);
-    double halfbox = 0.5 * box;
 
     int nthreads = omp_get_max_threads();
 
@@ -212,22 +211,6 @@ void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,do
             double dx  = xi - x[j];
             double dy  = yi - y[j];
             double dz  = zi - z[j];
-
-            if ( dx > halfbox ) {
-                dx -= box;
-            }else if ( dx < -halfbox ) {
-                dx += box;
-            }
-            if ( dy > halfbox ) {
-                dy -= box;
-            }else if ( dy < -halfbox ) {
-                dy += box;
-            }
-            if ( dz > halfbox ) {
-                dz -= box;
-            }else if ( dz < -halfbox ) {
-                dz += box;
-            }
 
             // all 27 images:
             for (int x = -1; x < 2; x++) {
@@ -250,14 +233,6 @@ void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,do
                     }
                 }
             }
-
-            //double r2  = dx*dx + dy*dy + dz*dz;
-            //double r = sqrt(r2);
-            //int mybin = (int)( r / binsize );
-
-            //if ( mybin < nbins ) 
-            //    g[mybin]++;
-
         }
     }
 }
@@ -265,8 +240,14 @@ void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,do
 void InitialPosition(int n,double box,double * x,double * y,double * z) {
 
     // distribute particles evenly in box
-    int cube_root_n = (int)pow(n,1.0/3.0) + 1;
+    int cube_root_n = 0;
+    do {
+        cube_root_n++;
+    }while (cube_root_n * cube_root_n * cube_root_n < n);
+    cube_root_n++;
+
     double space = box / cube_root_n;
+
     int id = 0;
     for (int i = 0; i < cube_root_n; i++) {
         for (int j = 0; j < cube_root_n; j++) {
@@ -300,14 +281,14 @@ void InitialVelocity(int n,double * vx,double * vy,double * vz, double temp) {
         double X = sqrt(-2.0 * log(U)) * cos(2.0*M_PI*V);
         double Y = sqrt(-2.0 * log(U)) * sin(2.0*M_PI*V);
 
-        vx[i] = 0.01;//vcen * X;
-        vy[i] = 0.01;//vcen * Y;
+        vx[i] = vcen * X;
+        vy[i] = vcen * Y;
 
         U = (double)rand()/RAND_MAX;
         V = (double)rand()/RAND_MAX;
         X = sqrt(-2.0 * log(U)) * cos(2.0*M_PI*V);
 
-        vz[i] = 0.01;//vcen * X;
+        vz[i] = vcen * X;
 
         comx += vx[i];
         comy += vy[i];

@@ -46,9 +46,9 @@ int main (int argc, char* argv[]) {
 
     if ( argc != 5 ) {
         printf("\n");
-        printf("    md.x -- simple molecular dynamics simulation for argon\n");
+        printf("    md_gpu.x -- gpu molecular dynamics simulation for argon\n");
         printf("\n");
-        printf("    usage: ./md.x n density time temp\n");
+        printf("    usage: ./md_gpu.x n density time temp\n");
         printf("\n");
         printf("    n:        number of particles\n");
         printf("    density:  density, which determines the box length\n");
@@ -222,7 +222,6 @@ int main (int argc, char* argv[]) {
 void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,double * z,int * g) {
 
     double binsize = box / (nbins - 1);
-    double halfbox = 0.5 * box;
 
     int nthreads = omp_get_max_threads();
 
@@ -238,22 +237,6 @@ void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,do
             double dx  = xi - x[j];
             double dy  = yi - y[j];
             double dz  = zi - z[j];
-
-            if ( dx > halfbox ) {
-                dx -= box;
-            }else if ( dx < -halfbox ) {
-                dx += box;
-            }
-            if ( dy > halfbox ) {
-                dy -= box;
-            }else if ( dy < -halfbox ) {
-                dy += box;
-            }
-            if ( dz > halfbox ) {
-                dz -= box;
-            }else if ( dz < -halfbox ) {
-                dz += box;
-            }
 
             // all 27 images:
             for (int x = -1; x < 2; x++) {
@@ -276,14 +259,6 @@ void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,do
                     }
                 }
             }
-
-            //double r2  = dx*dx + dy*dy + dz*dz;
-            //double r = sqrt(r2);
-            //int mybin = (int)( r / binsize );
-
-            //if ( mybin < nbins ) 
-            //    g[mybin]++;
-
         }
     }
 }
@@ -291,8 +266,14 @@ void PairCorrelationFunction(int n,int nbins,double box,double * x,double * y,do
 void InitialPosition(int n,double box,double * x,double * y,double * z) {
 
     // distribute particles evenly in box
-    int cube_root_n = (int)pow(n,1.0/3.0) + 1;
+    int cube_root_n = 0;
+    do {
+        cube_root_n++;
+    }while (cube_root_n * cube_root_n * cube_root_n < n);
+    cube_root_n++;
+
     double space = box / cube_root_n;
+
     int id = 0;
     for (int i = 0; i < cube_root_n; i++) {
         for (int j = 0; j < cube_root_n; j++) {
