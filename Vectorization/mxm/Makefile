@@ -3,7 +3,7 @@ TARGETS = mxm
 
 CXX = icpc
 
-CXXFLAGS = -Ofast -qopt-report -mkl=sequential 
+CXXFLAGS = -fast -qopt-report -mkl=sequential 
 
 all:	$(TARGETS)
 
