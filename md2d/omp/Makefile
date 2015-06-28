@@ -1,5 +1,5 @@
 CXX = icpc
-CXXFLAGS = -Ofast -openmp
+CXXFLAGS = -fast -qopenmp
 
 TARGETS = md
 
