@@ -1,3 +1,5 @@
+INCLUDE   =
+MKLROOT   = /opt/apps/intel13_1/mkl/11/
 MKL       =   ${MKLROOT}/lib/intel64/libmkl_gf_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_intel_thread.a -ldl -lpthread -lm -L/opt/apps/intel/13.1/compiler/lib/intel64/ -liomp5
 
 LIB       = -lcublas $(MKL)
