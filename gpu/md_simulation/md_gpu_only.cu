@@ -209,7 +209,7 @@ int main (int argc, char* argv[]) {
 
         start = omp_get_wtime();
         AccelerationSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_ax,gpu_ay,gpu_az);
-
+        cudaThreadSynchronize();
         end = omp_get_wtime();
         acc_time += end - start;
 
