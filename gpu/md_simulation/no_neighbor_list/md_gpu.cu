@@ -326,13 +326,13 @@ void InitialPosition(int n,double box,double * x,double * y,double * z) {
 
 void InitialVelocity(int n,double * vx,double * vy,double * vz, double temp) {
 
-    // random particle velocities (max = 0.01)
+    // random particle velocities (gaussian, centered at 0.1)
     srand(0);
     double comx = 0.0;
     double comy = 0.0;
     double comz = 0.0;
 
-    double vcen = 0.01;
+    double vcen = 0.1;
     for (int i = 0; i < n; i++) {
 
         // random gaussian distribution:
