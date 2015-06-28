@@ -4,11 +4,14 @@
 # ppn   - the number of MPI processes per node (ppn!)
 # the total number of processes is nodes*ppn
 #
-#PBS -l nodes=1:ppn=1,walltime=00:30:00
+#PBS -l nodes=1:ppn=1,walltime=00:10:00
+#PBS -q dev_q
 #PBS -N scf
-#PBS -q short
+#PBS -W group_list=training
+#PBS -A training
+#PBS -l advres=SICM2.29
 
 cd $PBS_O_WORKDIR
-OMP_NUM_THREADS=1 ./scf ala2.xyz
+OMP_NUM_THREADS=16 ./scf ala2.xyz
 
 
