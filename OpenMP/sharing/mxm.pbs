@@ -5,8 +5,11 @@
 # the total number of processes is nodes*ppn
 #
 #PBS -l nodes=1:ppn=1,walltime=00:05:00
-#PBS -N timemxm
-#PBS -q short
+#PBS -q dev_q
+#PBS -N mxm
+#PBS -W group_list=training
+#PBS -A training
+#PBS -l advres=SICM2.29
 
 cd $PBS_O_WORKDIR
 OMP_NUM_THREADS=1 ./mxm

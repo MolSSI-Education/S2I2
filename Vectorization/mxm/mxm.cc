@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cmath>
 #include <mkl.h>
-#include <ipp.h>
+//#include <ipp.h>
 #include "timerstuff.h"
 
 
