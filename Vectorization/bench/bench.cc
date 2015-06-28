@@ -31,14 +31,14 @@ double test(int n, double a, double * __restrict__ x, double * __restrict__ y) {
 
 
 int main() {
-    const int NMAX = 1024*1024*512;
+    const int NMAX = 1024*1024*64;
     double a = 1.1;
     double* x = new double[NMAX];
     double* y = new double[NMAX];
     
     for (int i=0; i<NMAX; i++) {
         x[i] = 1.0;
-        y[1] = 0.0;
+        y[i] = 0.0;
     }
 
     for (int n=1; n<1024; n+=1) {
