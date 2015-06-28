@@ -1,6 +1,6 @@
 
 CXX = icpc
-CXXFLAGS = -openmp
+CXXFLAGS = -qopenmp
 TARGETS = sections single_seq single
 
 all:	$(TARGETS)
