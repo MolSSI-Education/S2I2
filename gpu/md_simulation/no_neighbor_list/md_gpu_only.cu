@@ -5,7 +5,8 @@
  * 
  * This code can be used to run a simple molecular dynamics
  * simulation for argon.  There are periodic boundary
- * conditions, but the temperature is not constant.
+ * conditions, but I don't use neighbor lists, and there is
+ * no thermostat.
  *
  */
 
@@ -31,6 +32,8 @@
 
 __global__ void AccelerationSharedMemory(int n, double box, double * x, double * y, double * z, double * ax, double * ay, double * az);
 __global__ void PairCorrelationFunctionGPU(int n, int nbins, double box,double * x,double * y,double * z,unsigned int * g);
+__global__ void UpdateVelocityGPU(int n,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt);
+__global__ void UpdatePositionGPU(int n,double* x,double*y,double*z,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt,double box);
 
 void InitialVelocity(int n,double * vx,double * vy,double * vz,double temp);
 void InitialPosition(int n,double box,double * x,double * y,double * z);
@@ -134,11 +137,19 @@ int main (int argc, char* argv[]) {
     double * gpu_ay;
     double * gpu_az;
 
+    double * gpu_vx;
+    double * gpu_vy;
+    double * gpu_vz;
+
     unsigned int * gpu_g;
 
     cudaMalloc((void**)&gpu_x,n*sizeof(double));
     cudaMalloc((void**)&gpu_y,n*sizeof(double));
     cudaMalloc((void**)&gpu_z,n*sizeof(double));
+
+    cudaMalloc((void**)&gpu_vx,n*sizeof(double));
+    cudaMalloc((void**)&gpu_vy,n*sizeof(double));
+    cudaMalloc((void**)&gpu_vz,n*sizeof(double));
 
     cudaMalloc((void**)&gpu_ax,n*sizeof(double));
     cudaMalloc((void**)&gpu_ay,n*sizeof(double));
@@ -147,6 +158,20 @@ int main (int argc, char* argv[]) {
     // pair correlation function
     cudaMalloc((void**)&gpu_g,nbins*sizeof(unsigned int));
     cudaMemset((void*)gpu_g,'\0',nbins*sizeof(unsigned int));
+
+    // copy positions and velocities to device
+    cudaMemcpy(gpu_x,x,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_y,y,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_z,z,n*sizeof(double),cudaMemcpyHostToDevice);
+
+    cudaMemcpy(gpu_vx,vx,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_vy,vy,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_vz,vz,n*sizeof(double),cudaMemcpyHostToDevice);
+
+    // zero acceleration on gpu
+    cudaMemset((void*)gpu_ax,'\0',n*sizeof(double));
+    cudaMemset((void*)gpu_ay,'\0',n*sizeof(double));
+    cudaMemset((void*)gpu_az,'\0',n*sizeof(double));
 
     // threads per block should be multiple of the warp
     // size (32) and has max value cudaProp.maxThreadsPerBlock
@@ -172,29 +197,31 @@ int main (int argc, char* argv[]) {
     do { 
 
         double start = omp_get_wtime();
-        UpdatePosition(n,x,y,z,vx,vy,vz,ax,ay,az,dt,box);
+        UpdatePositionGPU<<<dimgrid,threads_per_block>>>(n,gpu_x,gpu_y,gpu_z,gpu_vx,gpu_vy,gpu_vz,gpu_ax,gpu_ay,gpu_az,dt,box);
+        cudaThreadSynchronize();
         double end = omp_get_wtime();
         pos_time += end - start;
 
         start = omp_get_wtime();
-        UpdateVelocity(n,vx,vy,vz,ax,ay,az,dt);
+        UpdateVelocityGPU<<<dimgrid,threads_per_block>>>(n,gpu_vx,gpu_vy,gpu_vz,gpu_ax,gpu_ay,gpu_az,dt);
+        cudaThreadSynchronize();
         end = omp_get_wtime();
         vel_time += end - start;
 
         start = omp_get_wtime();
-        //UpdateAcceleration(n,box,x,y,z,ax,ay,az);
-        UpdateAccelerationGPU(n,box,x,y,z,ax,ay,az,gpu_x,gpu_y,gpu_z,gpu_ax,gpu_ay,gpu_az);
+        AccelerationSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_ax,gpu_ay,gpu_az);
+        cudaThreadSynchronize();
         end = omp_get_wtime();
         acc_time += end - start;
 
         start = omp_get_wtime();
-        UpdateVelocity(n,vx,vy,vz,ax,ay,az,dt);
+        UpdateVelocityGPU<<<dimgrid,threads_per_block>>>(n,gpu_vx,gpu_vy,gpu_vz,gpu_ax,gpu_ay,gpu_az,dt);
+        cudaThreadSynchronize();
         end = omp_get_wtime();
         vel_time += end - start;
       
         if ( (iter+1) % 100 == 0 ) { 
             start = omp_get_wtime();
-            //PairCorrelationFunction(n,nbins,box,x,y,z,g);
             PairCorrelationFunctionGPU<<<dimgrid,threads_per_block>>>(n,nbins,box,gpu_x,gpu_y,gpu_z,gpu_g);
             cudaThreadSynchronize();
             npts++;
@@ -774,6 +801,46 @@ __global__ void PairCorrelationFunctionGPU(int n, int nbins, double box, double 
         }
     }
     __syncthreads();
+
+}
+__global__ void UpdatePositionGPU(int n,double* x,double*y,double*z,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt,double box) {
+
+    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
+    int i       = blockid*blockDim.x + threadIdx.x;
+
+    if ( i >= n ) return;
+
+    double halfdt2 = 0.5 * dt * dt;
+
+    x[i] += vx[i] * dt + ax[i] * halfdt2;
+    y[i] += vy[i] * dt + ay[i] * halfdt2;
+    z[i] += vz[i] * dt + az[i] * halfdt2;
+
+    // periodic boundaries:
+
+    if ( x[i]  < 0.0 )      x[i] += box;
+    else if ( x[i] >= box ) x[i] -= box;
+
+    if ( y[i]  < 0.0 )      y[i] += box;
+    else if ( y[i] >= box ) y[i] -= box;
+
+    if ( z[i]  < 0.0 )      z[i] += box;
+    else if ( z[i] >= box ) z[i] -= box;
+
+}
+
+__global__ void UpdateVelocityGPU(int n,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt) {
+
+    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
+    int i       = blockid*blockDim.x + threadIdx.x;
+
+    if ( i >= n ) return;
+
+    double halfdt = 0.5 * dt;
+
+    vx[i] += ax[i] * halfdt;
+    vy[i] += ay[i] * halfdt;
+    vz[i] += az[i] * halfdt;
 
 }
 
