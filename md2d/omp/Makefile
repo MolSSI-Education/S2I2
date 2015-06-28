@@ -1,5 +1,5 @@
 CXX = icpc
-CXXFLAGS = -fast -qopenmp
+CXXFLAGS = -xHOST -O3 -ipo -no-prec-div -fp-model fast=2 -qopenmp
 
 TARGETS = md
 

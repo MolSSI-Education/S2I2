@@ -1,11 +1,13 @@
+https://computing.llnl.gov/tutorials/openMP/
+
+http://web.eecs.utk.edu/~dongarra/WEB-PAGES/SPRING-2015/lect04_openmp.pdf
+
 https://github.com/davestampf/OpenMPTutorialFull
 
 http://openmp.org/wp/openmp-specifications/
   - see links to examples and reference card
 
 http://www.nic.uoregon.edu/iwomp2005/Talks/hoeflinger.pdf
-
-https://computing.llnl.gov/tutorials/openMP/
 
 http://openmp.org/mp-documents/omp-hands-on-SC08.pdf
 

@@ -2,7 +2,7 @@
 TARGETS = bench
 
 CXX = icpc
-CXXFLAGS = -fast -qopt-report -mkl=sequential 
+CXXFLAGS = -xHOST -O3 -ipo -no-prec-div -fp-model fast=2 -qopt-report -mkl=sequential 
 
 all:	$(TARGETS)
 
