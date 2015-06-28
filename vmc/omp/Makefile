@@ -1,5 +1,5 @@
 CXX = icpc
-CXXFLAGS = -xHOST -O3 -ipo -no-prec-div -openmp
+CXXFLAGS = -Ofast -ipo -openmp
 
 #CXX=g++
 #CXXFLAGS = -march=native -O3 -fopenmp

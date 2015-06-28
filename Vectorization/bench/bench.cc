@@ -45,7 +45,7 @@ int main() {
         std::cout << n << " " << test(n,a,x,y) << std::endl;
     }
 
-    for (int n=1024; n<32768; n+=4) {
+    for (int n=1024; n<32768; n+=64) {
         std::cout << n << " " << test(n,a,x,y) << std::endl;
     }
 

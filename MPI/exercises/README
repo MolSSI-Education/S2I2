@@ -29,7 +29,7 @@ doubles. And experiment with processes on the same node and on
 different nodes (this means setting #nodes and #ppn correctly in the
 PBS file).  How to verify you have set these correctly?
 
-3) Write a recursively adaptive quadrature program
+3) Parallelize the recursively adaptive quadrature program global/recursive.cc.
 
 4) Write MPI versions of the example SCF, MC, or MD codes
 

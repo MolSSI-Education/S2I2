@@ -1,4 +1,4 @@
-CXX = mpiicpc
+CXX = mpicxx
 TARGETS = trapezoid_seq global trapezoid_par recursive
 
 all:	$(TARGETS)

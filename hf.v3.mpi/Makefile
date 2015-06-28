@@ -6,7 +6,7 @@ LIBINT2INCLUDES = -I$(LIBINT2PATH)/include -I$(LIBINT2PATH)/include/libint2
 #LIBINT2INCLUDES = -I$(LIBINT2PATH)/include -I$(LIBINT2PATH)/include/libint2
 
 CXX = mpicxx
-CXXFLAGS = -std=c++11 -Ofast -g -D__cplusplus=2929292929
+CXXFLAGS = -std=c++11 -Ofast -ipo -g -D__cplusplus=99999999
 #CXXFLAGS = -std=c++11 -O3 -g -march=native -ffast-math
 CPPFLAGS = -I$(EIGENPATH) $(LIBINT2INCLUDES)
 LDFLAGS = $(CXXFLAGS)

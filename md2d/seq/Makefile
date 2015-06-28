@@ -1,5 +1,6 @@
-CXX = mpiicpc
-CXXFLAGS = -xHOST -O3 -ipo -no-prec-div -openmp
+CXX = icpc
+CXXFLAGS = -Ofast -openmp
+#CXXFLAGS = -xHOST -O3 -ipo -no-prec-div -openmp
 
 TARGETS = md
 

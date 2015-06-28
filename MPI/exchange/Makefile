@@ -1,4 +1,4 @@
-CXX = mpiicpc
+CXX = mpicxx
 TARGETS = exchange ring
 
 all:	$(TARGETS)
