@@ -10,17 +10,18 @@ using namespace std;
 
 double test(int n, double a, double * __restrict__ x, double * __restrict__ y) {
     uint64_t usedmin = 99999999999;
-    int niter = std::max(1, 4096/n);
+    int niter = std::max(1, 400/n);
 
     for (int attempt=0; attempt<3; attempt++) {
         uint64_t start = cycle_count();
         for (int iter=0; iter<niter; iter++) {
 
-            cblas_daxpy(n, a, x, 1, y, 1);
+	  //cblas_daxpy(n, a, x, 1, y, 1);
 
-	    //            for (int i=0; i<n; i++) {
-	    //                y[i] += a*x[i];
-	    //            }
+	                for (int i=0; i<n; i++) {
+	                    y[i] += a*x[i];
+	                }
+
             y[1] += 0.1; // force optimizer to not reorder loops
         }
         uint64_t used = cycle_count() - start;
@@ -31,13 +32,15 @@ double test(int n, double a, double * __restrict__ x, double * __restrict__ y) {
 
 
 int main() {
-    const int NMAX = 1024*1024*64;
+    const int NMAX = 1024*1024*16;
     double a = 1.1;
     double* x = new double[NMAX];
     double* y = new double[NMAX];
     
     for (int i=0; i<NMAX; i++) {
         x[i] = 1.0;
+    }
+    for (int i=0; i<NMAX; i++) {
         y[i] = 0.0;
     }
 
