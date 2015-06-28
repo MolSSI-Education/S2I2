@@ -1,5 +1,5 @@
 CXX = icpc
-CXXFLAGS = -openmp
+CXXFLAGS = -fast -qopenmp
 TARGETS = recursive_seq recursive tasks
 
 all:	$(TARGETS)

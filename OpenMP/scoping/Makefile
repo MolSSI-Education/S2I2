@@ -1,6 +1,6 @@
 
 CXX = icpc
-CXXFLAGS = -openmp
+CXXFLAGS = -qopenmp
 TARGETS = default default-none private private2 private3 firstprivate lastprivate
 
 all:	$(TARGETS)

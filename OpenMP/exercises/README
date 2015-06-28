@@ -17,8 +17,8 @@
 
 5)  What is false sharing?  Can U write a code with that problem?
 
-6) Time critical/atomic/reduction strategies for summation and explain
-   the observed behavior.
+6)  Time critical/atomic/reduction strategies for summation and explain
+    the observed behavior.
 
 7)  Work on some of your own code
 

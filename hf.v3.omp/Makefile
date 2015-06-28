@@ -1,9 +1,9 @@
-EIGENPATH = /gpfs/software/eigen-eigen-6b38706d90a9
-LIBINT2PATH = /gpfs/software/libint-2.1.0-beta-gcc-4.9.0x
+EIGENPATH = /home/hpc04/install-intel
+LIBINT2PATH = /home/hpc04/install-intel
 LIBINT2INCLUDES = -I$(LIBINT2PATH)/include -I$(LIBINT2PATH)/include/libint2
 
-CXX = g++
-CXXFLAGS = -std=c++11 -O2 -march=native -fopenmp
+CXX = icpc
+CXXFLAGS = -std=c++11 -fast -qopenmp -D__cplusplus=999999999
 CPPFLAGS = -I$(EIGENPATH) $(LIBINT2INCLUDES)
 LDFLAGS = 
 

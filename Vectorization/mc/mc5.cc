@@ -53,7 +53,8 @@ void kernel(double& x, double& p, double ran1, double ran2) {
 VSLStreamStatePtr ranstate;
 
 void vrand(int n, double* r, double a, double b) {
-    vdRngUniform(VSL_METHOD_DUNIFORM_STD, ranstate, n, r, a, b);
+  //VSL_METHOD_DUNIFORM_STD in intel 14??
+    vdRngUniform(VSL_RNG_METHOD_UNIFORM_STD, ranstate, n, r, 0.0, 1.0);
 }
 
 int main() {

@@ -1,6 +1,6 @@
 
 CXX = icpc
-CXXFLAGS = -openmp
+CXXFLAGS = -qopenmp
 TARGETS = sum atomic critical reduction mxm
 
 all:	$(TARGETS)
