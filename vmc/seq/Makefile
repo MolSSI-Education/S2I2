@@ -1,5 +1,5 @@
 CXX = icpc
-CXXFLAGS = -xHOST -O3 -ipo -no-prec-div
+CXXFLAGS = -fast
 
 vmc:	vmc.o
 	$(CXX) $(CXXFLAGS) -o $@ $^ 
