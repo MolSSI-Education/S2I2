@@ -15,5 +15,5 @@ cd $PBS_O_WORKDIR
 echo "------------------------------"
 mpirun hostname
 echo "------------------------------"
-mpirun  ./scf c6h12.xyz
+mpirun  ./scf ala2.xyz
 
