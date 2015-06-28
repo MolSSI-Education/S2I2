@@ -311,7 +311,7 @@ $L = $ latency, $B = $ bandwidth, $n = $ number of elements
   \item Serial scalar computation produces 1 result every $L$ cycles
   \item Pipelined SIMD produces $W$ results every cycle
   \item Pipelined is $W L$ times faster which is 16 with $W=L=$4
-  \item Allowing for 2 operations per cycle (*,+) this is becomes $32$
+  \item Allowing for 2 operations per cycle (*,+) this becomes $32$
   \item I.e., worst case serial, non-vector code can be 32x slower!!!!
   \\  
   
@@ -355,7 +355,8 @@ or from VML
 
 \begin{frame}[fragile]{DAXPY performance analysis}
   \begin{itemize}
-  \item In two cyles can do 2 loads, *, +, store, increment, branch
+  \item In two cyles must do 2 loads, *, +, store, increment, branch
+  \item Can only do 2 memory operations per cycle --> need 2 cycles
   \item AVX SIMD is 4 wide
   \item Hence, 4 iterations per 2 cycles = 0.5 cycles/iter at best
   \item L1 = 32KB (4096 dbl), 48 bytes/cycle \\
