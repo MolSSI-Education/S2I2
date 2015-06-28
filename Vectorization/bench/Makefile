@@ -10,4 +10,4 @@ all:	$(TARGETS)
 	$(CXX) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 clean:
-	/bin/rm -f *.o $(TARGETS) core* *~
+	/bin/rm -f *.o $(TARGETS) core* *~ *optrpt

@@ -5,3 +5,4 @@ all:
 
 clean:
 	for dir in $(SUBDIRS) ; do $(MAKE) -C $$dir clean ; done
+	/bin/rm -f *~
