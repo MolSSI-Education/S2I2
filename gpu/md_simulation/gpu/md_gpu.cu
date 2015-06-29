@@ -190,38 +190,45 @@ int main (int argc, char* argv[]) {
     cudaMalloc((void**)&gpu_x,n*sizeof(double));
     cudaMalloc((void**)&gpu_y,n*sizeof(double));
     cudaMalloc((void**)&gpu_z,n*sizeof(double));
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"malloc xyz");
 
     cudaMalloc((void**)&gpu_vx,n*sizeof(double));
     cudaMalloc((void**)&gpu_vy,n*sizeof(double));
     cudaMalloc((void**)&gpu_vz,n*sizeof(double));
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"malloc v xyz");
 
     cudaMalloc((void**)&gpu_ax,n*sizeof(double));
     cudaMalloc((void**)&gpu_ay,n*sizeof(double));
     cudaMalloc((void**)&gpu_az,n*sizeof(double));
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"malloc a xyz");
 
     // pair correlation function
     cudaMalloc((void**)&gpu_g,nbins*sizeof(unsigned int));
     cudaMemset((void*)gpu_g,'\0',nbins*sizeof(unsigned int));
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"malloc g");
 
     // copy positions and velocities to device
     cudaMemcpy(gpu_x,x,n*sizeof(double),cudaMemcpyHostToDevice);
     cudaMemcpy(gpu_y,y,n*sizeof(double),cudaMemcpyHostToDevice);
     cudaMemcpy(gpu_z,z,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"copy xyz");
 
     cudaMemcpy(gpu_vx,vx,n*sizeof(double),cudaMemcpyHostToDevice);
     cudaMemcpy(gpu_vy,vy,n*sizeof(double),cudaMemcpyHostToDevice);
     cudaMemcpy(gpu_vz,vz,n*sizeof(double),cudaMemcpyHostToDevice);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"copy v xyz");
 
     // zero acceleration on gpu
     cudaMemset((void*)gpu_ax,'\0',n*sizeof(double));
     cudaMemset((void*)gpu_ay,'\0',n*sizeof(double));
     cudaMemset((void*)gpu_az,'\0',n*sizeof(double));
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"memset a xyz");
 
     // threads per block should be multiple of the warp
@@ -248,15 +255,18 @@ int main (int argc, char* argv[]) {
     // neighbor list ... slightly more complicated than for the CPU
     int * gpu_n_neighbors;
     cudaMalloc((void**)&gpu_n_neighbors,n*sizeof(int));
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"malloc n_neighbors");
 
     // figure out reasonable estimate of the max number of
     // neighbors
     InitialNeighborCount<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_n_neighbors,r2cut);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"get n_neighbors");
 
     int * n_neighbors = (int*)malloc(n*sizeof(int));
     cudaMemcpy(n_neighbors,gpu_n_neighbors,n*sizeof(int),cudaMemcpyDeviceToHost);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"copy n_neighbors");
 
     int maxneighbors = 0;
@@ -278,11 +288,12 @@ int main (int argc, char* argv[]) {
     int * gpu_neighbors;
     cudaMalloc((void**)&gpu_neighbors,n*maxneighbors*sizeof(int));
     cudaMemset((void*)gpu_neighbors,'\0',n*maxneighbors*sizeof(unsigned int));
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"malloc neighbors");
 
     NeighborsOnGPUSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_neighbors,gpu_n_neighbors,maxneighbors,r2cut);
-    Check_CUDA_Error(stdout,"neighbor list");
     cudaThreadSynchronize();
+    Check_CUDA_Error(stdout,"neighbor list");
 
     double set_time = omp_get_wtime() - start_total;
 
@@ -295,37 +306,37 @@ int main (int argc, char* argv[]) {
 
         double start = omp_get_wtime();
         UpdatePositionOnGPU<<<dimgrid,threads_per_block>>>(n,gpu_x,gpu_y,gpu_z,gpu_vx,gpu_vy,gpu_vz,gpu_ax,gpu_ay,gpu_az,dt,box);
-        Check_CUDA_Error(stdout,"update position");
         cudaThreadSynchronize();
+        Check_CUDA_Error(stdout,"update position");
         double end = omp_get_wtime();
         pos_time += end - start;
 
         start = omp_get_wtime();
         UpdateVelocityOnGPU<<<dimgrid,threads_per_block>>>(n,gpu_vx,gpu_vy,gpu_vz,gpu_ax,gpu_ay,gpu_az,dt);
-        Check_CUDA_Error(stdout,"update velocity");
         cudaThreadSynchronize();
+        Check_CUDA_Error(stdout,"update velocity");
         end = omp_get_wtime();
         vel_time += end - start;
 
         start = omp_get_wtime();
         AccelerationOnGPU<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_ax,gpu_ay,gpu_az,gpu_neighbors,gpu_n_neighbors,maxneighbors);
-        Check_CUDA_Error(stdout,"update acceleration");
         cudaThreadSynchronize();
+        Check_CUDA_Error(stdout,"update acceleration");
         end = omp_get_wtime();
         acc_time += end - start;
 
         start = omp_get_wtime();
         UpdateVelocityOnGPU<<<dimgrid,threads_per_block>>>(n,gpu_vx,gpu_vy,gpu_vz,gpu_ax,gpu_ay,gpu_az,dt);
-        Check_CUDA_Error(stdout,"update velocity");
         cudaThreadSynchronize();
+        Check_CUDA_Error(stdout,"update velocity");
         end = omp_get_wtime();
         vel_time += end - start;
       
         if ( iter > 199 && iter % 100 == 0 ) { 
             start = omp_get_wtime();
             PairCorrelationFunctionOnGPU<<<dimgrid,threads_per_block>>>(n,nbins,box,binsize,gpu_x,gpu_y,gpu_z,gpu_g,gpu_neighbors,gpu_n_neighbors,maxneighbors);
-            Check_CUDA_Error(stdout,"update pair correlation function");
             cudaThreadSynchronize();
+            Check_CUDA_Error(stdout,"update pair correlation function");
             npts++;
             end = omp_get_wtime();
             cor_time += end - start;
@@ -334,9 +345,11 @@ int main (int argc, char* argv[]) {
         if ( (iter+1) % 20 == 0 ) {
             start = omp_get_wtime();
             NeighborsOnGPUSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_neighbors,gpu_n_neighbors,maxneighbors,r2cut);
+            cudaThreadSynchronize();
             Check_CUDA_Error(stdout,"update neighbor list");
 
             cudaMemcpy(n_neighbors,gpu_n_neighbors,n*sizeof(int),cudaMemcpyDeviceToHost);
+            cudaThreadSynchronize();
             Check_CUDA_Error(stdout,"copy n_neighbors");
 
             int mymax = 0;
@@ -349,7 +362,6 @@ int main (int argc, char* argv[]) {
                 exit(EXIT_FAILURE);
             }
 
-            cudaThreadSynchronize();
             end = omp_get_wtime();
             nbr_time += end - start;
         }
@@ -368,6 +380,7 @@ int main (int argc, char* argv[]) {
     printf("    #                  r");
     printf("                 g(r)\n");
     cudaMemcpy(g,gpu_g,nbins*sizeof(unsigned int),cudaMemcpyDeviceToHost);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"copy pair correlation function");
     for (int i = 1; i < nbins; i++) {
 
@@ -401,23 +414,28 @@ int main (int argc, char* argv[]) {
     cudaFree(gpu_x);
     cudaFree(gpu_y);
     cudaFree(gpu_z);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"free xyz");
 
     cudaFree(gpu_vx);
     cudaFree(gpu_vy);
     cudaFree(gpu_vz);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"free v xyz");
 
     cudaFree(gpu_ax);
     cudaFree(gpu_ay);
     cudaFree(gpu_az);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"free a xyz");
 
     cudaFree(gpu_g);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"free g");
 
     cudaFree(gpu_neighbors);
     cudaFree(gpu_n_neighbors);
+    cudaThreadSynchronize();
     Check_CUDA_Error(stdout,"free neighbors");
 
     cudaDeviceReset();
