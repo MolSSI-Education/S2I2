@@ -65,7 +65,7 @@ void Check_CUDA_Error(FILE*fp,const char *message){
     if (error!=cudaSuccess) {
        fprintf(fp,"\n  ERROR: %s: %s\n\n", message, cudaGetErrorString(error) );
        fflush(fp);
-       exit(-1);
+       exit(EXIT_FAILURE);
     }
 }
 
@@ -231,7 +231,7 @@ int main (int argc, char* argv[]) {
     for (int i = 0; i < n; i++) {
         if ( maxneighbors < n_neighbors[i]) maxneighbors = n_neighbors[i];
     }
-    maxneighbors *= 1.5;
+    maxneighbors *= 2;
     if ( maxneighbors > n - 1 ) maxneighbors = n - 1;
 
     int * gpu_neighbors;
@@ -294,6 +294,20 @@ int main (int argc, char* argv[]) {
             start = omp_get_wtime();
             NeighborsOnGPU<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_neighbors,gpu_n_neighbors,maxneighbors,r2cut);
             Check_CUDA_Error(stdout,"update neighbor list");
+
+            cudaMemcpy(n_neighbors,gpu_n_neighbors,n*sizeof(int),cudaMemcpyDeviceToHost);
+            Check_CUDA_Error(stdout,"copy n_neighbors");
+
+            int mymax = 0;
+            for (int i = 0; i < n; i++) {
+                if ( mymax < n_neighbors[i]) mymax = n_neighbors[i];
+            }
+            if ( mymax > maxneighbors ) {
+                printf("    error: current step has maximum %5i neighbors, but maxneighbors is %5i\n",mymax,maxneighbors);
+                printf("\n");
+                exit(EXIT_FAILURE);
+            }
+
             cudaThreadSynchronize();
             end = omp_get_wtime();
             nbr_time += end - start;
