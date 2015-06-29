@@ -5,7 +5,7 @@
  * 
  * This code can be used to run a simple molecular dynamics
  * simulation for argon.  There are periodic boundary
- * conditions, but the temperature is not constant.
+ * conditions and neighbor lists but no thermostat.
  *
  */
 
