@@ -2,7 +2,7 @@ Author - Patrick Avery - 2015
 
 Program sorts a list of random numbers using a quick sort algorithm.
 
-After downloading, simply type "make" to install.
+After downloading, simply type "make" to install. Note: c++11 may be required for the clocks. gcc is the default compiler (if you use another compiler, you may need to change the -fopenmp tag in the Makefile).
 
 "quickSort" is the executable. Arguments are as follows:
 

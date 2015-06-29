@@ -4,6 +4,7 @@
 #include <fstream>
 #include <ctime>
 #include <chrono>
+#include <omp.h>
 
 #include "quick_sort.h"
 #include "rng.h"
@@ -17,6 +18,8 @@ int main(int argc, char* argv[])
                  " Largest number to be generated.\nRespectively.\n";
     return 1;
   }
+
+  omp_set_nested(1);
 
   std::vector<int> list = rng::generateRandomIntVector(
                                 atoi(argv[1]), atoi(argv[2]), atoi(argv[3]));

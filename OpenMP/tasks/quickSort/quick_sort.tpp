@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "quick_sort.h"
-#include <iostream>
 
 template<typename T> void quick_sort::quickSort(std::vector<T> &list,
                                                 int start, int end)
