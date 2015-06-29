@@ -1,4 +1,17 @@
-// Author - Patrick Avery - 2015
+/**********************************************************************
+  main.cpp - basic test file for the quick sort that I wrote. It includes
+  a few timers from chrono and ctime. It also uses a random number
+  generator that returns a std::vector<int> of random numbers.
+
+  Copyright (C) 2015 by Patrick Avery
+  This source code is released under the New BSD License, (the "License").
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+***********************************************************************/
+
 
 #include <iostream>
 #include <fstream>
