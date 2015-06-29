@@ -38,6 +38,7 @@ __global__ void AccelerationOnGPU(int n, double box, double * x, double * y, dou
 
 __global__ void PairCorrelationFunctionOnGPU(int n, int nbins, double box, double binsize, double * x, double * y, double * z, unsigned int * g,int * neighbors,int * n_neighbors, int maxneighbors);
 __global__ void NeighborsOnGPU(int n,double box, double * x,double * y,double * z,int * neighbors, int * n_neighbors,int maxneighbors, double r2cut);
+__global__ void NeighborsOnGPUSharedMemory(int n,double box, double * x,double * y,double * z,int * neighbors, int * n_neighbors,int maxneighbors, double r2cut);
 
 __global__ void UpdateVelocityOnGPU(int n,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt);
 __global__ void UpdatePositionOnGPU(int n,double* x,double*y,double*z,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt,double box);
@@ -239,7 +240,7 @@ int main (int argc, char* argv[]) {
     cudaMemset((void*)gpu_neighbors,'\0',n*maxneighbors*sizeof(unsigned int));
     Check_CUDA_Error(stdout,"malloc neighbors");
 
-    NeighborsOnGPU<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_neighbors,gpu_n_neighbors,maxneighbors,r2cut);
+    NeighborsOnGPUSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_neighbors,gpu_n_neighbors,maxneighbors,r2cut);
     Check_CUDA_Error(stdout,"neighbor list");
     cudaThreadSynchronize();
 
@@ -292,7 +293,7 @@ int main (int argc, char* argv[]) {
         // update neighbor list
         if ( (iter+1) % 20 == 0 ) {
             start = omp_get_wtime();
-            NeighborsOnGPU<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_neighbors,gpu_n_neighbors,maxneighbors,r2cut);
+            NeighborsOnGPUSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpu_x,gpu_y,gpu_z,gpu_neighbors,gpu_n_neighbors,maxneighbors,r2cut);
             Check_CUDA_Error(stdout,"update neighbor list");
 
             cudaMemcpy(n_neighbors,gpu_n_neighbors,n*sizeof(int),cudaMemcpyDeviceToHost);
@@ -706,6 +707,130 @@ __global__ void InitialNeighborCount(int n,double box, double * x,double * y,dou
         }
 
     }
+
+}
+
+__global__ void NeighborsOnGPUSharedMemory(int n,double box, double * x,double * y,double * z,int * neighbors, int * n_neighbors,int maxneighbors, double r2cut) {
+
+    __shared__ double xj[NUM_THREADS];
+    __shared__ double yj[NUM_THREADS];
+    __shared__ double zj[NUM_THREADS];
+
+    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
+    int i       = blockid*blockDim.x + threadIdx.x;
+
+    double halfbox = 0.5 * box;
+
+    double xi;
+    double yi;
+    double zi;
+
+    if ( i < n ) {
+        // clear neighbor list
+        n_neighbors[i] = 0;
+        xi = x[i];
+        yi = y[i];
+        zi = z[i];
+    }else {
+        xi = -10000000000.0;
+        yi = -10000000000.0;
+        zi = -10000000000.0;
+    }
+
+    int j = 0;
+    while( j + blockDim.x <= n ) {
+
+        // load xj, yj, zj into shared memory
+        xj[threadIdx.x] = x[j + threadIdx.x];
+        yj[threadIdx.x] = y[j + threadIdx.x];
+        zj[threadIdx.x] = z[j + threadIdx.x];
+
+        // synchronize threads
+        __syncthreads();
+
+        for (int myj = 0; myj < blockDim.x; myj++) {
+
+            double dx  = xi - xj[myj];
+            double dy  = yi - yj[myj];
+            double dz  = zi - zj[myj];
+
+            // minimum image convention:
+            if ( dx > halfbox ) {
+                dx -= box;
+            }else if ( dx < -halfbox ) {
+                dx += box;
+            }
+            if ( dy > halfbox ) {
+                dy -= box;
+            }else if ( dy < -halfbox ) {
+                dy += box;
+            }
+            if ( dz > halfbox ) {
+                dz -= box;
+            }else if ( dz < -halfbox ) {
+                dz += box;
+            }
+
+            double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
+            if ( r2 < r2cut && i < n) {
+               neighbors[i*maxneighbors+n_neighbors[i]] = j+myj;
+               n_neighbors[i]++;
+            }
+        }
+
+        // synchronize threads
+        __syncthreads();
+
+        j += blockDim.x;
+    }
+
+    int leftover = n - (n / blockDim.x) * blockDim.x;
+
+    // synchronize threads
+    __syncthreads();
+
+    // last bit
+    if ( threadIdx.x < leftover ) {
+        // load rj into shared memory
+        xj[threadIdx.x] = x[j + threadIdx.x];
+        yj[threadIdx.x] = y[j + threadIdx.x];
+        zj[threadIdx.x] = z[j + threadIdx.x];
+    }
+
+    // synchronize threads
+    __syncthreads();
+
+    for (int myj = 0; myj < leftover; myj++) {
+
+        double dx  = xi - xj[myj];
+        double dy  = yi - yj[myj];
+        double dz  = zi - zj[myj];
+
+        if ( dx > halfbox ) {
+            dx -= box;
+        }else if ( dx < -halfbox ) {
+            dx += box;
+        }
+        if ( dy > halfbox ) {
+            dy -= box;
+        }else if ( dy < -halfbox ) {
+            dy += box;
+        }
+        if ( dz > halfbox ) {
+            dz -= box;
+        }else if ( dz < -halfbox ) {
+            dz += box;
+        }
+
+        double r2  = dx*dx + dy*dy + dz*dz + 10000000.0 * ((j+myj)==i);
+        if ( r2 < r2cut && i < n) {
+           neighbors[i*maxneighbors+n_neighbors[i]] = j+myj;
+           n_neighbors[i]++;
+        }
+    }
+
+    // synchronize threads
+    __syncthreads();
 
 }
 
