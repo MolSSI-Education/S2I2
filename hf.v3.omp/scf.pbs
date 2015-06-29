@@ -12,6 +12,10 @@
 #PBS -l advres=SICM2.29
 
 cd $PBS_O_WORKDIR
-OMP_NUM_THREADS=16 ./scf ala2.xyz
+
+for nth in 16 14 12 10 8 6 4 2 1 ; do 
+   OMP_NUM_THREADS=$nth ./scf c6h12.xyz
+done
+
 
 
