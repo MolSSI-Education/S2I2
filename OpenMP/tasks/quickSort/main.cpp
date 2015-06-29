@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
   quick_sort::quick_sort::quickSort(list);
 
   auto cpuTime = (clock() - start) / (double) CLOCKS_PER_SEC;
-  auto wallTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start2).count() * 0.001;
+  auto wallTime = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - start2).count() * 0.000000001;
 
   // Print sorted list to output file...
   myfile << "\nSORTED:\n";
@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
   std::sort(list2.begin(), list2.end());
 
   cpuTime = (clock() - start) / (double) CLOCKS_PER_SEC;
-  wallTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - start2).count() * 0.001;
+  wallTime = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - start2).count() * 0.000000001;
 
   std::cout << "\nBUILT-IN SORT CPU TIME:\n" << cpuTime << "\n\n";
   std::cout << "\nBUILT-IN SORT WALL TIME:\n" << wallTime << "\n\n";
