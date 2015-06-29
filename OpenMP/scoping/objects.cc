@@ -1,19 +1,20 @@
 #include <iostream>
+#include <omp.h>
 
 class A {
   int a;
 public:
-  A() : a(0) {std::cout << "Default constructor\n";}
-  A(int a) : a(a) {std::cout << "Constructor w value\n";}
-  A(const A& a) : a(a.a) {std::cout << "Copy constructor\n";}
+  A() : a(0) {std::cout << "Default constructor " << omp_get_thread_num() << std::endl;}
+  A(int a) : a(a) {std::cout << "Constructor w value " << omp_get_thread_num() << std::endl;}
+  A(const A& a) : a(a.a) {std::cout << "Copy constructor " << omp_get_thread_num() << std::endl;}
   A& operator=(const A& other) {
     if (this != &other) a = other.a;
-    std::cout << "Assignment\n";
+    std::cout << "Assignment " << omp_get_thread_num() << std::endl;
     return *this;
   }
   int get() const {return a;}
   void set(int a) {this->a = a;}
-  ~A() {std::cout << "Destructor\n";}
+  ~A() {std::cout << "Destructor " << omp_get_thread_num() << std::endl;}
 };
 
 int main() {
@@ -51,7 +52,7 @@ int main() {
   a.set(1); b.set(2);
 #pragma omp parallel default(none) shared(a) firstprivate(b) num_threads(2)
   a = b;
-  std::cout << "shared a firstprivate b " << a.get() << std::endl;
+  std::cout << "shared a firstprivate b " << a.get() << std::endl << std::endl;
 
   return 0;
 }
