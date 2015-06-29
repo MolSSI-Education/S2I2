@@ -355,8 +355,8 @@ or from VML
 
 \begin{frame}[fragile]{DAXPY performance analysis}
   \begin{itemize}
-  \item In two cyles must do 2 loads, *, +, store, increment, branch
-  \item Can only do 2 memory operations per cycle --> need 2 cycles
+  \item Each element needs 2 loads, *, +, store (unrolling offsets increment+branch)
+  \item Can only do 2 memory operations per cycle \ldots need 2 cycles
   \item AVX SIMD is 4 wide
   \item Hence, 4 iterations per 2 cycles = 0.5 cycles/iter at best
   \item L1 = 32KB (4096 dbl), 48 bytes/cycle \\
