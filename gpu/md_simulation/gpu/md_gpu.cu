@@ -141,6 +141,37 @@ int main (int argc, char* argv[]) {
     double cor_time = 0.0;
     double nbr_time = 0.0;
 
+    struct cudaDeviceProp cudaProp;
+    int gpu_id;
+    cudaGetDevice(&gpu_id);
+    cudaGetDeviceProperties( &cudaProp,gpu_id );
+    printf("\n");
+    printf("        _________________________________________________________\n");
+    printf("        CUDA device properties:\n");
+    printf("        name:                 %20s\n",cudaProp.name);
+    printf("        major version:        %20d\n",cudaProp.major);
+    printf("        minor version:        %20d\n",cudaProp.minor);
+    printf("        canMapHostMemory:     %20d\n",cudaProp.canMapHostMemory);
+    printf("        totalGlobalMem:       %20lu mb\n",
+      cudaProp.totalGlobalMem/(1024*1024));
+    printf("        sharedMemPerBlock:    %20lu\n",cudaProp.sharedMemPerBlock);
+    printf("        clockRate:            %20.3f ghz\n",
+      cudaProp.clockRate/1.0e6);
+    printf("        regsPerBlock:         %20d\n",cudaProp.regsPerBlock);
+    printf("        warpSize:             %20d\n",cudaProp.warpSize);
+    printf("        maxThreadsPerBlock:   %20d\n",cudaProp.maxThreadsPerBlock);
+    printf("        _________________________________________________________\n");
+    printf("\n");
+    fflush(stdout);
+
+    // total memory requirements:
+    double mem = 9.0 * sizeof(double) * n;
+    if ( mem > (double)cudaProp.totalGlobalMem ) {
+        printf("    error: not enough memory on device\n");
+        printf("\n");
+        exit(EXIT_FAILURE);
+    }
+
     // gpu memory:
     double * gpu_x;
     double * gpu_y;
@@ -234,6 +265,15 @@ int main (int argc, char* argv[]) {
     }
     maxneighbors *= 2;
     if ( maxneighbors > n - 1 ) maxneighbors = n - 1;
+
+    mem = 9.0 * sizeof(double) * n + (double)n * maxneighbors * sizeof(int);
+    printf("    memory requirements for GPU: %20.2lf mb\n",mem/1024./1024.);
+    printf("\n");
+    if ( mem > (double)cudaProp.totalGlobalMem ) {
+        printf("    error: not enough memory on device\n");
+        printf("\n");
+        exit(EXIT_FAILURE);
+    }
 
     int * gpu_neighbors;
     cudaMalloc((void**)&gpu_neighbors,n*maxneighbors*sizeof(int));
