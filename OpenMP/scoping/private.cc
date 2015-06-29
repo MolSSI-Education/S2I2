@@ -3,7 +3,7 @@
 
 int main(int argc, const char** argv) 
 {
-  int a = 1;
+  int a = 99;
   int b = -1;
 
 #pragma omp parallel default(none) shared(a) private(b)

@@ -1,6 +1,7 @@
 Playing with scoping rules
 
 default ... parallel section with default scope (=shared)
+[what is the scope of c?]
 
 default-none ... parallel section with default scope set to none
              ... compilation should FAIL
