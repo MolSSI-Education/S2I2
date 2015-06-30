@@ -37,7 +37,6 @@
 __global__ void AccelerationOnGPU(int n_start,int n_end, double box, double * x, double * y, double * z, double * ax, double * ay, double * az,int * neighbors,int * n_neighbors, int maxneighbors);
 
 __global__ void PairCorrelationFunctionOnGPU(int n, int nbins, double box, double binsize, double * x, double * y, double * z, unsigned int * g,int * neighbors,int * n_neighbors, int maxneighbors);
-__global__ void NeighborsOnGPU(int n,int n_start,int n_end,double box, double * x,double * y,double * z,int * neighbors, int * n_neighbors,int maxneighbors, double r2cut);
 __global__ void NeighborsOnGPUSharedMemory(int n,double box, double * x,double * y,double * z,int * neighbors, int * n_neighbors,int maxneighbors, double r2cut);
 
 __global__ void UpdateVelocityOnGPU(int n,double* vx,double*vy,double*vz,double* ax,double*ay,double*az,double dt);
@@ -323,20 +322,10 @@ int main (int argc, char* argv[]) {
         cudaThreadSynchronize();
         Check_CUDA_Error(stdout,"malloc neighbors");
 
-        //NeighborsOnGPU<<<dimgrid,threads_per_block>>>(n,n_start_gpu[i],n_end_gpu[i],box,gpu_x[i],gpu_y[i],gpu_z[i],gpu_neighbors[i],gpu_n_neighbors[i],maxneighbors,r2cut);
         NeighborsOnGPUSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpu_x[i],gpu_y[i],gpu_z[i],gpu_neighbors[i],gpu_n_neighbors[i],maxneighbors,r2cut);
         cudaThreadSynchronize();
         Check_CUDA_Error(stdout,"neighbor list");
    }
-   // copy neighbor lists to other gpus
-   //#pragma omp parallel for schedule(dynamic) num_threads (num_gpus)
-   //for (int i = 0; i < num_gpus; i++) {
-   //    for (int j = 0; j < num_gpus; j++) {
-   //        if ( i == j ) continue;
-   //        cudaMemcpyPeer(gpu_neighbors[j]   + n_start_gpu[i] ,j,gpu_neighbors[i]   + n_start_gpu[i],i,(n_end_gpu[i]-n_start_gpu[i])*maxneighbors*sizeof(int));
-   //        cudaMemcpyPeer(gpu_n_neighbors[j] + n_start_gpu[i] ,j,gpu_n_neighbors[i] + n_start_gpu[i],i,(n_end_gpu[i]-n_start_gpu[i])*sizeof(int));
-   //     }
-   //}
 
     double set_time = omp_get_wtime() - start_total;
 
@@ -423,19 +412,9 @@ int main (int argc, char* argv[]) {
             for (int i = 0; i < num_gpus; i++) {
                 cudaSetDevice(i);
                 NeighborsOnGPUSharedMemory<<<dimgrid,threads_per_block>>>(n,box,gpu_x[i],gpu_y[i],gpu_z[i],gpu_neighbors[i],gpu_n_neighbors[i],maxneighbors,r2cut);
-                //NeighborsOnGPU<<<dimgrid,threads_per_block>>>(n,n_start_gpu[i],n_end_gpu[i],box,gpu_x[i],gpu_y[i],gpu_z[i],gpu_neighbors[i],gpu_n_neighbors[i],maxneighbors,r2cut);
                 cudaThreadSynchronize();
                 Check_CUDA_Error(stdout,"update neighbor list");
             }
-            // copy neighbor lists to other gpus
-            //#pragma omp parallel for schedule(dynamic) num_threads (num_gpus)
-            //for (int i = 0; i < num_gpus; i++) {
-            //    for (int j = 0; j < num_gpus; j++) {
-            //        if ( i == j ) continue;
-            //        cudaMemcpyPeer(gpu_neighbors[j]   + n_start_gpu[i] ,j,gpu_neighbors[i]   + n_start_gpu[i],i,(n_end_gpu[i]-n_start_gpu[i])*maxneighbors*sizeof(int));
-            //        cudaMemcpyPeer(gpu_n_neighbors[j] + n_start_gpu[i] ,j,gpu_n_neighbors[i] + n_start_gpu[i],i,(n_end_gpu[i]-n_start_gpu[i])*sizeof(int));
-            //     }
-            // }
 
             cudaSetDevice(0);
             cudaMemcpy(n_neighbors,gpu_n_neighbors[0],n*sizeof(int),cudaMemcpyDeviceToHost);
@@ -949,55 +928,6 @@ __global__ void NeighborsOnGPUSharedMemory(int n,double box, double * x,double *
     // synchronize threads
     __syncthreads();
 
-}
-
-__global__ void NeighborsOnGPU(int n,int n_start,int n_end,double box, double * x,double * y,double * z,int * neighbors, int * n_neighbors,int maxneighbors, double r2cut) {
-
-    int blockid = blockIdx.x*gridDim.y + blockIdx.y;
-    int i       = blockid*blockDim.x + threadIdx.x;
-
-    //if ( i >= n ) return;
-    if ( i >= n_end ) return;
-    if ( i < n_start ) return;
-
-    double halfbox = 0.5 * box;
-
-    // clear neighbor list
-    n_neighbors[i] = 0;
-
-    double xi = x[i];
-    double yi = y[i];
-    double zi = z[i];
-
-    for (int j = 0; j < n; j++) {
-        if ( i == j ) continue;
-        double dx  = xi - x[j];
-        double dy  = yi - y[j];
-        double dz  = zi - z[j];
-
-        // minimum image convention:
-        if ( dx > halfbox ) {
-            dx -= box;
-        }else if ( dx < -halfbox ) {
-            dx += box;
-        }
-        if ( dy > halfbox ) {
-            dy -= box;
-        }else if ( dy < -halfbox ) {
-            dy += box;
-        }
-        if ( dz > halfbox ) {
-            dz -= box;
-        }else if ( dz < -halfbox ) {
-            dz += box;
-        }
-
-        double r2  = dx*dx + dy*dy + dz*dz;
-        if ( r2 < r2cut ) {
-           neighbors[i*maxneighbors+n_neighbors[i]] = j;
-           n_neighbors[i]++;
-        }
-    }
 }
 
 // evaluate acceleration on GPU, using neighbor lists
