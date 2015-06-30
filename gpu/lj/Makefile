@@ -12,7 +12,8 @@ ljforces.x: main.cu
 	$(NVCC) $(NVCCFLAGS) $(LIB) $(INCLUDE) main.cu -o ljforces.x
 
 ljforces_cpu.x: cpu_only.cc
-	$(CXX) $(CFLAGS) $(LIB) $(INCLUDE) cpu_only.cc -o ljforces_cpu.x
+	$(NVCC) $(NVCCFLAGS) $(LIB) $(INCLUDE) cpu_only.cc -o ljforces_cpu.x
+	#$(CXX) $(CFLAGS) $(LIB) $(INCLUDE) cpu_only.cc -o ljforces_cpu.x
 
 clean:
 	rm -f *.o *.x
