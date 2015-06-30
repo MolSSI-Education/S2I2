@@ -132,6 +132,15 @@ int main ( int argc, char * argv[] ) {
     printf("        _________________________________________________________\n");
     printf("\n");
 
+    // check for errors
+    cudaError_t error = cudaGetLastError();
+    if (error!=cudaSuccess) {
+       printf("\n");
+       printf("    error: %s\n\n", cudaGetErrorString(error) );
+       printf("\n");
+       exit(EXIT_FAILURE);
+    }
+
     // number of blocks and threads for vecadd_gpu_by_blocks_and_threads
     int dim = (int)sqrt(n) + 1;
 
@@ -166,7 +175,7 @@ int main ( int argc, char * argv[] ) {
     cudaThreadSynchronize();
 
     // check for errors
-    cudaError_t error = cudaGetLastError();
+    error = cudaGetLastError();
     if (error!=cudaSuccess) {
        printf("\n");
        printf("    error: %s\n\n", cudaGetErrorString(error) );
