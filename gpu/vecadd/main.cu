@@ -55,7 +55,7 @@ int main ( int argc, char * argv[] ) {
 
     if ( argc != 2 ) {
         printf("\n");
-        printf("    usage: ./test.x dimension\n");
+        printf("    usage: ./vecadd.x dimension\n");
         printf("\n");
         exit(EXIT_FAILURE);
     }
@@ -68,8 +68,7 @@ int main ( int argc, char * argv[] ) {
     double * c = (double*)malloc(n*sizeof(double));
 
     // initialize x and y buffers
-    srand(time(NULL));
-    #pragma omp parallel for schedule(static)
+    srand(0);
     for (int i = 0; i < n; i++) {
         a[i] = 2.0 * ( (double)rand()/RAND_MAX - 1.0);
         b[i] = 2.0 * ( (double)rand()/RAND_MAX - 1.0);
