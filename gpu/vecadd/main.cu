@@ -165,6 +165,15 @@ int main ( int argc, char * argv[] ) {
     }
     cudaThreadSynchronize();
 
+    // check for errors
+    cudaError_t error = cudaGetLastError();
+    if (error!=cudaSuccess) {
+       printf("\n");
+       printf("    error: %s\n\n", cudaGetErrorString(error) );
+       printf("\n");
+       exit(EXIT_FAILURE);
+    }
+
     end = omp_get_wtime();
     double gputime = end-start;
 
