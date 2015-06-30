@@ -120,16 +120,18 @@ coordT forces(const neighT& neigh, const coordT& coords, double& virial, double&
         }
     }
     
-    coordT tmp(natom, xyT(0.0,0.0));
-    MPI_Allreduce(&f[0], &tmp[0], 2*natom, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    coordT ftotal(natom, xyT(0.0,0.0));
+    MPI_Allreduce(&f[0], &ftotal[0], 2*natom, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    double t[2] = {virial,pe}, q[2];
-    MPI_Allreduce(t, q, 2, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    virial = q[0];
-    pe = q[1];
+    double virial_total, pe_total;
+    MPI_Allreduce(&virial, &virial_total, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&pe,     &pe_total,     1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+
+    virial = virial_total; // To return values via the argument list
+    pe = pe_total;
 
     time_force += MPI_Wtime() - start;
-    return tmp;
+    return ftotal;
 }
 
 inline double restrict(double a, double b) {
