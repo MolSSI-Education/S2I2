@@ -5,7 +5,7 @@ MKL       =   ${MKLROOT}/lib/intel64/libmkl_gf_lp64.a ${MKLROOT}/lib/intel64/lib
 LIB       = -lcublas $(MKL)
 CFLAGS    = -O2 -openmp   -m64 -I${MKLROOT}/include -DCUDA
 NVCCFLAGS = -O2 -arch sm_20 -Xcompiler -fopenmp
-EXEC      = test.x
+EXEC      = dgemm.x
 CXX       = icpc
 NVCC      = nvcc
 

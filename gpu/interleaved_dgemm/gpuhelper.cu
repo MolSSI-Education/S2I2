@@ -29,7 +29,7 @@ void GPUHelper::CudaInitGPU() {
 
     int n;
     cudaGetDeviceCount(&n);
-    num_gpus = 1;//n;
+    num_gpus = n;
 
     if ( !cuda_ ) num_gpus = 0;
 
@@ -933,7 +933,7 @@ void GPUHelper::DGEMM_Timings(int dim,int nrepeats,std::string kernel,std::strin
     double end = omp_get_wtime();
     double tot = (end - start)/nrepeats;
     printf("\n");
-    printf("  n = %5i nrepeats = %5i transpose = %s kernel = %s GF = %20.12lf\n",dim,nrepeats,kernel.c_str(),transpose.c_str(),m*n*k*2.0/tot/1024./1024./1024.);
+    printf("  n = %5i nrepeats = %5i kernel = %s transpose = %s GF = %20.12lf\n",dim,nrepeats,kernel.c_str(),transpose.c_str(),m*n*k*2.0/tot/1024./1024./1024.);
     printf("\n");
     fflush(stdout);
 
