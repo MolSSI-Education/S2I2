@@ -4,10 +4,15 @@ global illustrates
  ... all reduce
  ... broadcast
 
-trapezoid_seq ... sequential version 
+pi_seq 
+ ... sequential calculation of pi via Monte-Carlo
+
+trapezoid_seq ... sequential version of trapezoid integration
 
 trapezoid illustrates use of
  ... broadcast
  ... reduce
- ... master/worker model ... distribtued logic
+ ... distribtued logic
+
+
 
