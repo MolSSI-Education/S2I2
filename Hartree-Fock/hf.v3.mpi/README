@@ -1,0 +1,50 @@
+Incremental transformation to derive the MPI version.
+
+We will parallelize in exactly the same way as the OpenMP version
+
+
+1) Introduce MPIInit and Finalize get rid of excess print and guard
+   all remaining print statements with if(rank==0)
+
+   Oh, and insert some total timing again
+
+2) broadcast command line argument to all processes 
+
+   - what size buffer should we use for broadcasting?
+
+   [here assume that everyone will have access to the file using the
+   same name ... not usually a valid assumption]
+
+3) use the same count/mod mechanism and a global sum
+
+   Ugh ... how to do the global sum using an eigen matrix?
+
+   Don't forget to do all reduce.
+
+   Paranoia suggests also broadcasting the orbitals in case of random phases
+
+
+
+Exercises
+
+ - repeat the parallelization starting from the sequential version
+
+ - change it so only process 0 reads from the file and broadcasts data
+   to everyone
+
+ - parallelize the 1-electron pieces
+
+ - develop a performance model for the program
+
+ - introduce Schwarz screening
+
+
+Hexane
+ build time=1.51s   total time=1.80s   nproc=64
+ build time=2.66s   total time=2.94s   nproc=32
+ build time=4.92s   total time=5.20s   nproc=16
+ build time=6.22s   total time=6.48s   nproc=12
+ build time=8.88s   total time=9.10s   nproc=8
+ build time=16.98s   total time=17.19s   nproc=4
+ build time=33.48s   total time=33.68s   nproc=2
+ build time=66.70s   total time=66.90s   nproc=1

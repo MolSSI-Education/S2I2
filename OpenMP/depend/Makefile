@@ -1,6 +1,6 @@
 
 CXX = icpc
-CXXFLAGS = -openmp
+CXXFLAGS = -qopenmp
 TARGETS = sequential openmp_static openmp_dynamic openmp_guided openmp_ordered
 
 all:	$(TARGETS)

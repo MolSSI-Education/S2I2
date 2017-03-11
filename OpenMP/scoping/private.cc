@@ -1,11 +1,10 @@
 #include <iostream>
 #include <omp.h>
 
-int a = 1;
-
 int main(int argc, const char** argv) 
 {
-  int b=-1;
+  int a = 99;
+  int b = -1;
 
 #pragma omp parallel default(none) shared(a) private(b)
   {

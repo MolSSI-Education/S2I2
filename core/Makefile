@@ -4,8 +4,8 @@ CPPFLAGS = -DHAVE_MKL
 LDFLAGS  = -mkl
 
 # uncomment if want to use Eigen
-EIGENPATH = /gpfs/software/eigen-eigen-6b38706d90a9
-CPPFLAGS  += -I$(EIGENPATH) -DHAVE_EIGEN
+#EIGENPATH = /gpfs/software/eigen-eigen-6b38706d90a9
+#CPPFLAGS  += -I$(EIGENPATH) -DHAVE_EIGEN
 
 default:: gemm axpy
 

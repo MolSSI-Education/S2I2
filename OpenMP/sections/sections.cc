@@ -39,10 +39,9 @@ int main() {
       int Do, some, stuff;
       std::cout << "Section : " << omp_get_thread_num() << std::endl;
     }
+
 #pragma omp section
-    {
       mary();
-    }
   } // end of sections and parallel
   
   return 0;

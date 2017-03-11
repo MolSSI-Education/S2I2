@@ -1,4 +1,4 @@
-CXX = mpiicpc
+CXX = mpicxx
 TARGETS = hello
 
 all:	$(TARGETS)

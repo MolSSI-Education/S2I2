@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
   if (argc != 4) {
     std::cout << "gemm -- benchmarks square matrix multiplication C[i][j] = A[i][k] B[k][j]" << std::endl;
     std::cout << "usage: gemm n nrepeats kernel" << std::endl;
-    std::cout << "       n        -- number of elements in vectors x and y" << std::endl;
+    std::cout << "       n        -- matrix size" << std::endl;
     std::cout << "       nrepeats -- number of times to run the kernel" << std::endl;
     std::cout << "       kernel   -- kernel type, allowed values:" << std::endl;
     std::cout << "                   plain   = plain ole loops" << std::endl;
@@ -63,7 +63,7 @@ double profile_dgemm(size_t n,
   std::fill(b, b+nsq, 2.0);
   std::fill(c, c+nsq, 0.0);
 
-  const auto tstart = std::chrono::system_clock::now();
+  const auto tstart = std::chrono::high_resolution_clock::now();
 
   if (kernel == "plain")
     dgemm(a, b, c, n, nrepeats);
@@ -83,7 +83,7 @@ double profile_dgemm(size_t n,
     exit(1);
   }
 
-  const auto tstop = std::chrono::system_clock::now();
+  const auto tstop = std::chrono::high_resolution_clock::now();
   const std::chrono::duration<double> time_elapsed = tstop - tstart;
 
   std::cout << "n = " << n << " nrepeats = " << nrepeats << " kernel = " << kernel

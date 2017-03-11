@@ -3,7 +3,7 @@ Illustrates sharing variables and data between threads and also hints
 as to the cost of some of the mutual exclusion constructs.
 
 Run the programs using the time command and different numbers of
-threas to explore speed.
+threads to explore speed.
 
 sum ... original sequential sum code ... correct answer is N*(N-1)/2=49999995000000
 
@@ -12,6 +12,8 @@ atomic ... parallel sum using atomic
 critical ... parallel sum using critical
 
 reduction ... parallel sum using a reduction variable
+
+mxm ... simple parallel matrix multiplication
 
 
 

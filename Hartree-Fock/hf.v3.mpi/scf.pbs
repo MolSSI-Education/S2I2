@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+# nodes - the number of computer nodes in the job
+# ppn   - the number of MPI processes per node (ppn!)
+# the total number of processes is nodes*ppn
+#
+#PBS -l nodes=4:ppn=16,walltime=00:05:00
+#PBS -q dev_q
+#PBS -N scf
+#PBS -W group_list=training
+#PBS -A training
+#PBS -l advres=SICM2.29
+
+cd $PBS_O_WORKDIR
+mpirun  ./scf ala2.xyz
+

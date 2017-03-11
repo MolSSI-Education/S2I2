@@ -1,0 +1,13 @@
+
+#put this stuff into your .bashrc rile
+
+module purge; module load intel/15.3 impi/5.0
+source /opt/apps/intel/15.3/mkl/bin/mklvars.sh intel64
+
+export CC=icc
+export CXX=icpc
+export RJHINSTALL=/home/hpc04/install-intel/
+export PATH=$RJHINSTALL/bin:$PATH
+export LD_LIBRARY_PATH=$RJHINSTALL/lib64:$RJHINSTALL/lib:$LD_LIBRARY_PATH
+export LD_RUN_PATH=$RJHINSTALL/lib64:$RJHINSTALL/lib:$LD_RUN_PATH
+export MANPATH=$RJHINSTALL/share/man:$MANPATH

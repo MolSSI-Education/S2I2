@@ -51,7 +51,6 @@ void neighbor_list(const coordT& coords, thrneighT& thrneigh) {
 	neigh.clear();
 	neigh.reserve(100*natom/nthread);
 
-	int count = 0;
 	for (int i=tid; i<natom; i+=nthread) {
 	    double xi = coords[i].first;
 	    double yi = coords[i].second;

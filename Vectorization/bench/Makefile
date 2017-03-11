@@ -2,7 +2,7 @@
 TARGETS = bench
 
 CXX = icpc
-CXXFLAGS = -xHOST -O3 -ipo -no-prec-div  -vec-report6 -mkl=sequential 
+CXXFLAGS = -xHOST -O3 -ipo -no-prec-div -fp-model fast=2 -qopt-report -mkl=sequential 
 
 all:	$(TARGETS)
 
@@ -10,4 +10,4 @@ all:	$(TARGETS)
 	$(CXX) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 clean:
-	/bin/rm -f *.o $(TARGETS) core* *~
+	/bin/rm -f *.o $(TARGETS) core* *~ *optrpt
